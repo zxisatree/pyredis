@@ -20,3 +20,9 @@ Supported commands include:
 - XREAD
 
 Also supports streams, replication (with `--replicaof`) and limited persistence (can read RDB files but not write them).
+
+# Why if/else instead of try/catch for exception handling?
+PyRedis is meant to be a drop in replacement for quick development on Windows, and to fix the inability to ctrl+C to stop the server. I expect to have a lot of bugs during development, and try/catch is only faster when there are no exceptions
+
+# Why threading and not asyncio?
+I'm more familiar with threading and don't expect to have a lot of concurrent connections
