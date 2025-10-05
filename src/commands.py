@@ -14,7 +14,7 @@ from data_types import (
 import exceptions
 from interfaces import Command
 from logs import logger
-from utils import construct_conn_id, transform_to_execute_output
+from utils import calculate_score, construct_conn_id, transform_to_execute_output
 
 
 class NoOp(Command):
@@ -1069,7 +1069,8 @@ class GeoaddCommand(Command):
             return RespSimpleError(b"ERR invalid longitude").encode_to_list()
         if not (-85.05112878 <= self.latitude <= +85.05112878):
             return RespSimpleError(b"ERR invalid latitude").encode_to_list()
-        return RespInteger(int(db.zadd(self.key, 0, self.member))).encode_to_list()
+        score = calculate_score(self.longitude, self.latitude)
+        return RespInteger(int(db.zadd(self.key, score, self.member))).encode_to_list()
 
     @classmethod
     def craft_request(cls, *args: str):
