@@ -6,6 +6,7 @@ MAX_STREAM_ID_SEQ_NO = 2**32 - 1
 
 OK_SIMPLE_RESP_STRING = "+OK\r\n"
 NULL_BULK_RESP_STRING = "$-1\r\n"
+NULL_ARRAY_RESP_STRING = "*-1\r\n"
 XACT_QUEUED_RESPONSE = "+QUEUED\r\n"
 EMPTY_RESP_ARRAY = "*0\r\n"
 SUBSCRIBED_MODE_ERROR = "-ERR Can't execute command: only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in subscribed mode\r\n"

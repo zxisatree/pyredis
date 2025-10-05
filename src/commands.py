@@ -104,7 +104,7 @@ class SetCommand(Command):
     @staticmethod
     def validate_px(px_cmd: RespBulkString):
         if px_cmd.data.upper() != b"PX":
-            raise exceptions.ValidationError(
+            raise exceptions.UnsupportedOperationError(
                 f"Unsupported SET command (fourth element is not 'PX') {px_cmd.data}"
             )
 
@@ -630,7 +630,7 @@ class BlpopCommand(Command):
             ).encode_to_list()
         else:
             # timed out
-            return transform_to_execute_output(constants.NULL_BULK_RESP_STRING)
+            return transform_to_execute_output(constants.NULL_ARRAY_RESP_STRING)
 
     @classmethod
     def craft_request(cls, *args: str):
@@ -1043,6 +1043,43 @@ class ZremCommand(Command):
             craft_command("ZREM", *args).encode(),
             args[0].encode(),
             args[1].encode(),
+        )
+
+
+class GeoaddCommand(Command):
+    expected_arg_count = [4]
+
+    def __init__(
+        self,
+        raw_cmd: bytes,
+        key: bytes,
+        longitude: float,
+        latitude: float,
+        member: bytes,
+    ):
+        self._raw_cmd = raw_cmd
+        self._keyword = b"GEOADD"
+        self.key = key
+        self.longitude = longitude
+        self.latitude = latitude
+        self.member = member
+
+    def execute(self, db, replica_handler, conn):
+        if not (-180 <= self.longitude <= 180):
+            return RespSimpleError(b"ERR invalid longitude").encode_to_list()
+        if not (-85.05112878 <= self.latitude <= +85.05112878):
+            return RespSimpleError(b"ERR invalid latitude").encode_to_list()
+        return RespInteger(int(db.zadd(self.key, 0, self.member))).encode_to_list()
+
+    @classmethod
+    def craft_request(cls, *args: str):
+        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
+        return GeoaddCommand(
+            craft_command("GEOADD", *args).encode(),
+            args[0].encode(),
+            float(args[1].encode()),
+            float(args[2].encode()),
+            args[3].encode(),
         )
 
 

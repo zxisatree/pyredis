@@ -444,7 +444,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
 
             lo = bisect.bisect_right(value, stream_id, key=lambda x: x[0])
             if lo >= len(value):
-                return transform_to_execute_output(constants.NULL_BULK_RESP_STRING)
+                return transform_to_execute_output(constants.NULL_ARRAY_RESP_STRING)
 
             inter: list[RespDataType] = []
             for i in range(lo, len(value)):

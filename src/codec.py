@@ -148,14 +148,11 @@ def parse_resp_cmd(
         score = resp_elements[2]
         name = resp_elements[3]
         try:
-            return commands.ZaddCommand(
-                raw_cmd, set_key.data, float(score.data), name.data
-            )
+            zadd_score = float(score.data)
         except ValueError:
-            logger.error("Tried to ZADD with non float score")
-            return commands.ZaddCommand(
-                raw_cmd, set_key.data, float(score.data), name.data
-            )
+            logger.error("Tried to ZADD with non float score, defaulting to 0.0")
+            zadd_score = 0.0
+        return commands.ZaddCommand(raw_cmd, set_key.data, zadd_score, name.data)
     elif cmd_str == b"ZRANK":
         set_key = resp_elements[1]
         name = resp_elements[2]
@@ -225,6 +222,23 @@ def parse_resp_cmd(
         channel_name = resp_elements[1].data
         msg = resp_elements[2].data
         return commands.PublishCommand(raw_cmd, channel_name, msg)
+    elif cmd_str == b"GEOADD":
+        key = resp_elements[1].data
+        longitude = resp_elements[2].data
+        latitude = resp_elements[3].data
+        member = resp_elements[4].data
+        try:
+            geoadd_longitude = float(longitude)
+            geoadd_latitude = float(latitude)
+        except ValueError:
+            logger.error(
+                "The longitude or latitude provided are not floats, defaulting to 0"
+            )
+            geoadd_longitude = 0.0
+            geoadd_latitude = 0.0
+        return commands.GeoaddCommand(
+            raw_cmd, key, geoadd_longitude, geoadd_latitude, member
+        )
     elif cmd_str.startswith(b"REDIS"):
         return commands.RdbFileCommand(raw_cmd)
     else:
