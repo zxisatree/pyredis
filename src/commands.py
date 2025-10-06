@@ -1084,6 +1084,47 @@ class GeoaddCommand(Command):
         )
 
 
+class GeoposCommand(Command):
+    def __init__(
+        self,
+        raw_cmd: bytes,
+        key: bytes,
+        members: list[bytes],
+    ):
+        self._raw_cmd = raw_cmd
+        self._keyword = b"GEOPOS"
+        self.key = key
+        self.members = members
+
+    def execute(self, db, replica_handler, conn):
+        positions = db.geopos(self.key, self.members)
+        return RespArray(
+            [
+                RespArray(
+                    [
+                        RespBulkString(str(position[0]).encode()),
+                        RespBulkString(str(position[1]).encode()),
+                    ]
+                )
+                if position is not None
+                else RespArray([])
+                for position in positions
+            ]
+        ).encode_to_list()
+
+    @classmethod
+    def craft_request(cls, *args: str):
+        args_len = len(args)
+        if args_len < 3:
+            error_msg = f"{cls.__name__} takes at least 3 arguments, but {args_len} {'was' if args_len == 1 else 'were'} provided"
+            raise exceptions.RequestCraftError(error_msg)
+        return GeoposCommand(
+            craft_command("GEOPOS", *args).encode(),
+            args[0].encode(),
+            [arg.encode() for arg in args[1:]],
+        )
+
+
 def verify_arg_count(
     command_name: str, expected_arg_count: Iterable[int], args_len: int
 ):

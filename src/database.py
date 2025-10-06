@@ -19,6 +19,7 @@ from utils import (
     ConnId,
     ThreadsafeDefaultdict,
     ThreadsafeDict,
+    decode_score,
     transform_to_execute_output,
 )
 
@@ -39,6 +40,9 @@ class SortedSet:
 
     def __len__(self):
         return len(self.set)
+
+    def __contains__(self, key: bytes) -> bool:
+        return key in self.names
 
     def get_slice(self, start: int, stop: int):
         """exclusive of stop"""
@@ -521,6 +525,18 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         value = self.store[key]
         set_val = cast(SortedSet, value)
         return set_val.remove(name)
+
+    def geopos(
+        self, key: bytes, members: list[bytes]
+    ) -> list[tuple[float, float] | None]:
+        if key not in self.store or self.key_types[key] != Database.ValType.SET:
+            return []
+        value = self.store[key]
+        set_val = cast(SortedSet, value)
+        return [
+            decode_score(set_val.score(member)) if member in set_val else None
+            for member in members
+        ]
 
 
 @functools.total_ordering

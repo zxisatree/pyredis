@@ -39,6 +39,10 @@ def interleave64(v: int) -> int:
     return v
 
 
+def decode_score(score: float) -> tuple[float, float]:
+    return (0, 0)
+
+
 class ThreadsafeDict[KT, VT](dict):
     """Coarse locking wrapper over a dict"""
 
