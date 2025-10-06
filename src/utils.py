@@ -15,7 +15,7 @@ def transform_to_execute_output(single_result: str) -> list[bytes]:
     return [single_result.encode()]
 
 
-def calculate_score(latitude: float, longitude: float) -> float:
+def calculate_score(longitude: float, latitude: float) -> float:
     normalized_latitude = int(
         2**26 * (latitude - constants.MIN_LATITUDE) / constants.LATITUDE_RANGE
     )

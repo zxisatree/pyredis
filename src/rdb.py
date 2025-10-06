@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 import constants
 from logs import logger
@@ -91,7 +91,7 @@ class RdbFile:
             case b"\xfd":
                 # expiry time in s
                 expiry = datetime.fromtimestamp(
-                    int.from_bytes(self.read(4), "little"), UTC
+                    int.from_bytes(self.read(4), "little"), timezone.utc
                 )
                 expiry = expiry.replace(tzinfo=None)
                 key, value = self.parse_kv(self.read(1))
@@ -99,7 +99,7 @@ class RdbFile:
             case b"\xfc":
                 # expiry time in ms
                 expiry = datetime.fromtimestamp(
-                    int.from_bytes(self.read(8), "little") / 1e3, UTC
+                    int.from_bytes(self.read(8), "little") / 1e3, timezone.utc
                 )
                 expiry = expiry.replace(tzinfo=None)
                 key, value = self.parse_kv(self.read(1))
