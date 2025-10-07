@@ -534,7 +534,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         value = self.store[key]
         set_val = cast(SortedSet, value)
         return [
-            decode_score(set_val.score(member)) if member in set_val else None
+            decode_score(int(set_val.score(member))) if member in set_val else None
             for member in members
         ]
 
