@@ -95,10 +95,16 @@ class RespSimpleString(RespDataType):
 
 class RespArray(RespDataType):
     # Sequence is covariant, list is invariant
-    def __init__(self, elements: Sequence[RespDataType]):
-        self.elements = elements
+    def __init__(self, elements: Sequence[RespDataType] | None):
+        self.is_null_array = elements is None
+        if not self.is_null_array:
+            self.elements = cast(Sequence[RespDataType], elements)
+        else:
+            self.elements = []
 
     def __len__(self) -> int:
+        if self.is_null_array:
+            return -1
         return len(self.elements)
 
     def __getitem__(self, idx) -> list[RespDataType] | RespDataType:
@@ -109,12 +115,18 @@ class RespArray(RespDataType):
             return res
 
     def __str__(self) -> str:
+        if self.is_null_array:
+            return "NULL_ARRAY"
         return str(self.elements)
 
     def __repr__(self) -> str:
+        if self.is_null_array:
+            return "RespArray(None)"
         return f"RespArray({repr(self.elements)})"
 
     def encode(self) -> bytes:
+        if self.is_null_array:
+            return constants.NULL_ARRAY_RESP_STRING.encode()
         return f"*{len(self.elements)}\r\n".encode() + b"".join(
             map(lambda x: x.encode(), self.elements)
         )

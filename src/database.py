@@ -530,7 +530,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         self, key: bytes, members: list[bytes]
     ) -> list[tuple[float, float] | None]:
         if key not in self.store or self.key_types[key] != Database.ValType.SET:
-            return []
+            return [None for _ in members]
         value = self.store[key]
         set_val = cast(SortedSet, value)
         return [

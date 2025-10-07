@@ -1107,7 +1107,7 @@ class GeoposCommand(Command):
                     ]
                 )
                 if position is not None
-                else RespArray([])
+                else RespArray(None)
                 for position in positions
             ]
         ).encode_to_list()
