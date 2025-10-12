@@ -2,7 +2,6 @@ import bisect
 from datetime import datetime
 from enum import Enum
 import functools
-from math import radians, sin, cos, sqrt, asin
 import os
 import socket
 from threading import Condition, Lock, Semaphore
@@ -21,6 +20,7 @@ from utils import (
     ThreadsafeDefaultdict,
     ThreadsafeDict,
     decode_score,
+    haversines,
     transform_to_execute_output,
 )
 
@@ -540,21 +540,31 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         ]
 
     def geodist(self, key: bytes, place1: bytes, place2: bytes) -> float:
-        # haversine's formula
         if key not in self.store or self.key_types[key] != Database.ValType.SET:
             return 0
         value = self.store[key]
         set_val = cast(SortedSet, value)
         lon1, lat1 = decode_score(int(set_val.score(place1)))
         lon2, lat2 = decode_score(int(set_val.score(place2)))
-        dLat = radians(lat2 - lat1)
-        dLon = radians(lon2 - lon1)
-        lat1 = radians(lat1)
-        lat2 = radians(lat2)
-        a = sin(dLat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dLon / 2) ** 2
-        c = 2 * asin(sqrt(a))
+        return haversines(lon1, lat1, lon2, lat2)
 
-        return constants.EARTH_RADIUS * c
+    def geosearch(
+        self,
+        key: bytes,
+        longitude: float,
+        latitude: float,
+        radius: float,
+    ) -> list[bytes]:
+        if key not in self.store or self.key_types[key] != Database.ValType.SET:
+            return []
+        value = self.store[key]
+        set_val = cast(SortedSet, value)
+        result = []
+        for value in set_val.set:
+            value_lon, value_lat = decode_score(int(value.score))
+            if haversines(longitude, latitude, value_lon, value_lat) <= radius:
+                result.append(value.name)
+        return result
 
 
 @functools.total_ordering

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from math import radians, sin, cos, sqrt, asin
 import socket
 from threading import Lock, RLock
 
@@ -72,6 +73,16 @@ def deinterleave64(v: int) -> int:
     v = (v | (v >> 8)) & 0x0000FFFF0000FFFF
     v = (v | (v >> 16)) & 0x00000000FFFFFFFF
     return v
+
+
+def haversines(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    dLat = radians(lat2 - lat1)
+    dLon = radians(lon2 - lon1)
+    lat1 = radians(lat1)
+    lat2 = radians(lat2)
+    a = sin(dLat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dLon / 2) ** 2
+    c = 2 * asin(sqrt(a))
+    return constants.EARTH_RADIUS * c
 
 
 class ThreadsafeDict[KT, VT](dict):

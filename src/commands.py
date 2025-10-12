@@ -1151,6 +1151,56 @@ class GeodistCommand(Command):
         )
 
 
+class GeosearchCommand(Command):
+    expected_arg_count = [3]
+
+    def __init__(
+        self,
+        raw_cmd: bytes,
+        key: bytes,
+        mode: bytes,
+        longitude: float,
+        latitude: float,
+        byradius: bytes,
+        radius: float,
+        unit: bytes,
+    ):
+        if mode != b"FROMLONLAT" or byradius != b"BYRADIUS" or unit != b"m":
+            raise NotImplementedError()
+        self._raw_cmd = raw_cmd
+        self._keyword = b"GEOSEARCH"
+        self.key = key
+        self.mode = mode
+        self.longitude = longitude
+        self.latitude = latitude
+        self.byradius = byradius
+        self.radius = radius
+        self.unit = unit
+
+    def execute(self, db, replica_handler, conn):
+        results = db.geosearch(
+            self.key,
+            self.longitude,
+            self.latitude,
+            self.radius,
+        )
+        return RespArray([RespBulkString(name) for name in results]).encode_to_list()
+
+    @classmethod
+    def craft_request(cls, *args: str):
+        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
+        return GeosearchCommand(
+            craft_command("GEOSEARCH", *args).encode(),
+            args[0].encode(),
+            args[1].encode(),
+            float(args[2].encode()),
+            float(args[3].encode()),
+            args[4].encode(),
+            float(args[5].encode()),
+            args[6].encode(),
+        )
+
+
 def verify_arg_count(
     command_name: str, expected_arg_count: Iterable[int], args_len: int
 ):

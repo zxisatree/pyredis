@@ -248,6 +248,35 @@ def parse_resp_cmd(
         place1 = resp_elements[2].data
         place2 = resp_elements[3].data
         return commands.GeodistCommand(raw_cmd, key, place1, place2)
+    elif cmd_str == b"GEOSEARCH":
+        key = resp_elements[1].data
+        mode = resp_elements[2].data
+        longitude = resp_elements[3].data
+        latitude = resp_elements[4].data
+        byradius = resp_elements[5].data
+        radius = resp_elements[6].data
+        unit = resp_elements[7].data
+        try:
+            geosearch_longitude = float(longitude)
+            geosearch_latitude = float(latitude)
+            geosearch_radius = float(radius)
+        except ValueError:
+            logger.error(
+                "The longitude/latitude/radius provided are not floats, defaulting to 0"
+            )
+            geosearch_longitude = 0.0
+            geosearch_latitude = 0.0
+            geosearch_radius = 0
+        return commands.GeosearchCommand(
+            raw_cmd,
+            key,
+            mode,
+            geosearch_longitude,
+            geosearch_latitude,
+            byradius,
+            geosearch_radius,
+            unit,
+        )
     elif cmd_str.startswith(b"REDIS"):
         return commands.RdbFileCommand(raw_cmd)
     else:
