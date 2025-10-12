@@ -29,6 +29,7 @@ def encode_score(longitude: float, latitude: float):
 
 
 def decode_score(score: int) -> tuple[float, float]:
+    # score is passed as an int, but used as a float here
     y = score >> 1
     x = score
     grid_latitude_number = deinterleave64(x)

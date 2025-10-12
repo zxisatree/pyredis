@@ -1125,6 +1125,32 @@ class GeoposCommand(Command):
         )
 
 
+class GeodistCommand(Command):
+    expected_arg_count = [3]
+
+    def __init__(self, raw_cmd: bytes, key: bytes, place1: bytes, place2: bytes):
+        self._raw_cmd = raw_cmd
+        self._keyword = b"GEODIST"
+        self.key = key
+        self.place1 = place1
+        self.place2 = place2
+
+    def execute(self, db, replica_handler, conn):
+        return RespBulkString(
+            str(db.geodist(self.key, self.place1, self.place2)).encode()
+        ).encode_to_list()
+
+    @classmethod
+    def craft_request(cls, *args: str):
+        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
+        return GeodistCommand(
+            craft_command("GEODIST", *args).encode(),
+            args[0].encode(),
+            args[1].encode(),
+            args[2].encode(),
+        )
+
+
 def verify_arg_count(
     command_name: str, expected_arg_count: Iterable[int], args_len: int
 ):

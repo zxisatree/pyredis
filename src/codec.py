@@ -243,6 +243,11 @@ def parse_resp_cmd(
         key = resp_elements[1].data
         members = [resp_element.data for resp_element in resp_elements[2:]]
         return commands.GeoposCommand(raw_cmd, key, members)
+    elif cmd_str == b"GEODIST":
+        key = resp_elements[1].data
+        place1 = resp_elements[2].data
+        place2 = resp_elements[3].data
+        return commands.GeodistCommand(raw_cmd, key, place1, place2)
     elif cmd_str.startswith(b"REDIS"):
         return commands.RdbFileCommand(raw_cmd)
     else:

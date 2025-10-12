@@ -2,6 +2,7 @@ import bisect
 from datetime import datetime
 from enum import Enum
 import functools
+from math import radians, sin, cos, sqrt, asin
 import os
 import socket
 from threading import Condition, Lock, Semaphore
@@ -537,6 +538,23 @@ class Database(metaclass=singleton_meta.SingletonMeta):
             decode_score(int(set_val.score(member))) if member in set_val else None
             for member in members
         ]
+
+    def geodist(self, key: bytes, place1: bytes, place2: bytes) -> float:
+        # haversine's formula
+        if key not in self.store or self.key_types[key] != Database.ValType.SET:
+            return 0
+        value = self.store[key]
+        set_val = cast(SortedSet, value)
+        lon1, lat1 = decode_score(int(set_val.score(place1)))
+        lon2, lat2 = decode_score(int(set_val.score(place2)))
+        dLat = radians(lat2 - lat1)
+        dLon = radians(lon2 - lon1)
+        lat1 = radians(lat1)
+        lat2 = radians(lat2)
+        a = sin(dLat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dLon / 2) ** 2
+        c = 2 * asin(sqrt(a))
+
+        return constants.EARTH_RADIUS * c
 
 
 @functools.total_ordering
