@@ -129,9 +129,12 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         self.subscribers: ThreadsafeDefaultdict[
             bytes, set[tuple[ConnId, socket.socket]]
         ] = ThreadsafeDefaultdict(set)
-        self.passwords: ThreadsafeDefaultdict[bytes, list[str]] = ThreadsafeDefaultdict(
-            list
+        self.passwords: ThreadsafeDefaultdict[bytes, list[bytes]] = (
+            ThreadsafeDefaultdict(list)
         )
+        self.authenticated_sessions: ThreadsafeDefaultdict[
+            ConnId, tuple[bytes, bytes]
+        ] = ThreadsafeDefaultdict(lambda: (b"default", b""))
 
         self.dir = dir
         self.dbfilename = dbfilename
@@ -143,6 +146,11 @@ class Database(metaclass=singleton_meta.SingletonMeta):
             self.rdb = rdb.RdbFile(constants.EMPTY_RDB_FILE)
         self.init_from_rdb(self.rdb)
         logger.info(f"db initialised with {self.store=}")
+
+    def is_conn_authenticated(self, conn_id: ConnId):
+        user, provided_password = self.authenticated_sessions[conn_id]
+        passwords = self.passwords[user]
+        return len(passwords) == 0 or provided_password in passwords
 
     def init_from_rdb(self, rdb_file: rdb.RdbFile):
         for key, value in rdb_file.key_values.items():
@@ -570,11 +578,28 @@ class Database(metaclass=singleton_meta.SingletonMeta):
                 result.append(value.name)
         return result
 
-    def get_passwords(self, user: bytes):
+    def get_passwords(self, user: bytes) -> list[bytes]:
         return self.passwords[user]
 
-    def set_password(self, user: bytes, password: bytes):
-        self.passwords[user].append(hashlib.sha256(password).hexdigest())
+    def set_password(self, user: bytes, password: bytes, conn_id: ConnId):
+        """Keeps you logged in after changing password"""
+        hashed_password = hashlib.sha256(password).hexdigest().encode()
+        self.passwords[user].append(hashed_password)
+        retrieved_user, _ = self.authenticated_sessions[conn_id]
+        # TODO: can we set passwords for other users? probably not
+        # TODO: is this 'stay logged in while setting pw' only for default?
+        if user == retrieved_user:
+            self.authenticated_sessions[conn_id] = (user, hashed_password)
+
+    def authenticate(self, user: bytes, password: bytes, conn_id: ConnId) -> bool:
+        hashed_password = hashlib.sha256(password).hexdigest().encode()
+        retrieved_passwords = self.get_passwords(user)
+        is_authenticated = any(
+            password == hashed_password for password in retrieved_passwords
+        )
+        if is_authenticated:
+            self.authenticated_sessions[conn_id] = (user, hashed_password)
+        return is_authenticated
 
 
 @functools.total_ordering

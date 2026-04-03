@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import hashlib
 from typing import Iterable, cast
 
 import constants
@@ -1238,17 +1237,16 @@ class AclGetuserCommand(Command):
                 RespBulkString(b"flags"),
                 RespArray(properties),
                 RespBulkString(b"passwords"),
-                RespArray(
-                    [RespBulkString(password.encode()) for password in passwords]
-                ),
+                RespArray([RespBulkString(password) for password in passwords]),
             ]
         ).encode_to_list()
 
     @classmethod
     def craft_request(cls, *args: str):
         verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return AclWhoamiCommand(
+        return AclGetuserCommand(
             craft_command("ACL WHOAMI", *args).encode(),
+            args[0].encode(),
         )
 
 
@@ -1263,7 +1261,8 @@ class AclSetuserCommand(Command):
 
     def execute(self, db, replica_handler, conn):
         if self.property.startswith(b">"):
-            db.set_password(self.user, self.property[1:])
+            conn_id = construct_conn_id(conn)
+            db.set_password(self.user, self.property[1:], conn_id)
             return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
         else:
             raise exceptions.UnsupportedOperationError(
@@ -1273,13 +1272,16 @@ class AclSetuserCommand(Command):
     @classmethod
     def craft_request(cls, *args: str):
         verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return AclWhoamiCommand(
+        return AclSetuserCommand(
             craft_command("ACL WHOAMI", *args).encode(),
+            args[0].encode(),
+            args[1].encode(),
         )
 
 
 class AuthCommand(Command):
     expected_arg_count = [2]
+    allowed_while_unauthenticated = True
 
     def __init__(self, raw_cmd: bytes, user: bytes, password: bytes):
         self._raw_cmd = raw_cmd
@@ -1288,9 +1290,9 @@ class AuthCommand(Command):
         self._keyword = b"ACL"
 
     def execute(self, db, replica_handler, conn):
-        hashed_password = hashlib.sha256(self.password).hexdigest()
-        retrieved_passwords = db.get_passwords(self.user)
-        if any(password == hashed_password for password in retrieved_passwords):
+        conn_id = construct_conn_id(conn)
+        is_authenticated = db.authenticate(self.user, self.password, conn_id)
+        if is_authenticated:
             return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
         else:
             return RespSimpleError(
@@ -1300,8 +1302,10 @@ class AuthCommand(Command):
     @classmethod
     def craft_request(cls, *args: str):
         verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return AclWhoamiCommand(
+        return AuthCommand(
             craft_command("ACL WHOAMI", *args).encode(),
+            args[0].encode(),
+            args[1].encode(),
         )
 
 

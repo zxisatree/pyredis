@@ -120,8 +120,11 @@ def execute_cmd(
 ):
     in_xact = db.xact_exists(conn_id)
     in_subscribed_mode = db.in_subscribed_mode(conn_id)
+    is_conn_authenticated = db.is_conn_authenticated(conn_id)
 
-    if in_xact and not cmd.allowed_in_xact:
+    if not is_conn_authenticated and not cmd.allowed_while_unauthenticated:
+        executed = transform_to_execute_output(constants.NOAUTH_ERROR)
+    elif in_xact and not cmd.allowed_in_xact:
         db.queue_xact_cmd(conn_id, cmd)
         executed = transform_to_execute_output(constants.XACT_QUEUED_RESPONSE)
     elif in_subscribed_mode and not cmd.allowed_in_subscribed_mode:

@@ -10,6 +10,7 @@ NULL_ARRAY_RESP_STRING = "*-1\r\n"
 XACT_QUEUED_RESPONSE = "+QUEUED\r\n"
 EMPTY_RESP_ARRAY = "*0\r\n"
 SUBSCRIBED_MODE_ERROR = "-ERR Can't execute command: only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in subscribed mode\r\n"
+NOAUTH_ERROR = "-NOAUTH Authentication required.\r\n"
 
 STREAM_ID_NOT_GREATER_ERROR = (
     "ERR The ID specified in XADD is equal or smaller than the target stream top item"

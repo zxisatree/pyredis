@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 class Command(ABC):
     allowed_in_subscribed_mode = False
     allowed_in_xact = False
+    allowed_while_unauthenticated = False
     propogated_to_replicas = False
 
     def __init__(self):

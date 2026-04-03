@@ -291,7 +291,6 @@ def parse_resp_cmd(
             property = resp_elements[3].data
             # properties = [resp_element.data for resp_element in resp_elements[3:]]
             return commands.AclSetuserCommand(raw_cmd, user, property)
-
         else:
             raise Exception(f"unknown ACL command {raw_cmd=}")
     elif cmd_str == b"AUTH":
