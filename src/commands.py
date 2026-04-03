@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import hashlib
 from typing import Iterable, cast
 
 import constants
@@ -1268,6 +1269,33 @@ class AclSetuserCommand(Command):
             raise exceptions.UnsupportedOperationError(
                 "SETUSER is only allowed for setting passwords with >"
             )
+
+    @classmethod
+    def craft_request(cls, *args: str):
+        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
+        return AclWhoamiCommand(
+            craft_command("ACL WHOAMI", *args).encode(),
+        )
+
+
+class AuthCommand(Command):
+    expected_arg_count = [2]
+
+    def __init__(self, raw_cmd: bytes, user: bytes, password: bytes):
+        self._raw_cmd = raw_cmd
+        self.user = user
+        self.password = password
+        self._keyword = b"ACL"
+
+    def execute(self, db, replica_handler, conn):
+        hashed_password = hashlib.sha256(self.password).hexdigest()
+        retrieved_passwords = db.get_passwords(self.user)
+        if any(password == hashed_password for password in retrieved_passwords):
+            return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
+        else:
+            return RespSimpleError(
+                b"WRONGPASS invalid username-password pair or user is disabled."
+            ).encode_to_list()
 
     @classmethod
     def craft_request(cls, *args: str):

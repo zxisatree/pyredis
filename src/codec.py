@@ -294,5 +294,9 @@ def parse_resp_cmd(
 
         else:
             raise Exception(f"unknown ACL command {raw_cmd=}")
+    elif cmd_str == b"AUTH":
+        user = resp_elements[1].data
+        password = resp_elements[2].data
+        return commands.AuthCommand(raw_cmd, user, password)
     else:
         raise Exception(f"skipping unknown command {raw_cmd=}")
