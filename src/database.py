@@ -2,6 +2,7 @@ import bisect
 from datetime import datetime
 from enum import Enum
 import functools
+import hashlib
 import os
 import socket
 from threading import Condition, Lock, Semaphore
@@ -128,6 +129,9 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         self.subscribers: ThreadsafeDefaultdict[
             bytes, set[tuple[ConnId, socket.socket]]
         ] = ThreadsafeDefaultdict(set)
+        self.passwords: ThreadsafeDefaultdict[bytes, list[str]] = ThreadsafeDefaultdict(
+            list
+        )
 
         self.dir = dir
         self.dbfilename = dbfilename
@@ -565,6 +569,12 @@ class Database(metaclass=singleton_meta.SingletonMeta):
             if haversines(longitude, latitude, value_lon, value_lat) <= radius:
                 result.append(value.name)
         return result
+
+    def get_passwords(self, user: bytes):
+        return self.passwords[user]
+
+    def set_password(self, user: bytes, password: bytes):
+        self.passwords[user].append(hashlib.sha256(password).hexdigest())
 
 
 @functools.total_ordering

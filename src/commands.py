@@ -1228,14 +1228,46 @@ class AclGetuserCommand(Command):
         self._keyword = b"ACL"
 
     def execute(self, db, replica_handler, conn):
+        passwords = db.get_passwords(self.user)
+        properties = []
+        if len(passwords) == 0:
+            properties.append(RespBulkString(b"nopass"))
         return RespArray(
             [
                 RespBulkString(b"flags"),
-                RespArray([RespBulkString(b"nopass")]),
+                RespArray(properties),
                 RespBulkString(b"passwords"),
-                RespArray([]),
+                RespArray(
+                    [RespBulkString(password.encode()) for password in passwords]
+                ),
             ]
         ).encode_to_list()
+
+    @classmethod
+    def craft_request(cls, *args: str):
+        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
+        return AclWhoamiCommand(
+            craft_command("ACL WHOAMI", *args).encode(),
+        )
+
+
+class AclSetuserCommand(Command):
+    expected_arg_count = [2]
+
+    def __init__(self, raw_cmd: bytes, user: bytes, property: bytes):
+        self._raw_cmd = raw_cmd
+        self.user = user
+        self.property = property
+        self._keyword = b"ACL"
+
+    def execute(self, db, replica_handler, conn):
+        if self.property.startswith(b">"):
+            db.set_password(self.user, self.property[1:])
+            return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
+        else:
+            raise exceptions.UnsupportedOperationError(
+                "SETUSER is only allowed for setting passwords with >"
+            )
 
     @classmethod
     def craft_request(cls, *args: str):

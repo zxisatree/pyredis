@@ -286,6 +286,12 @@ def parse_resp_cmd(
         elif subcmd == b"GETUSER":
             user = resp_elements[2].data
             return commands.AclGetuserCommand(raw_cmd, user)
+        elif subcmd == b"SETUSER":
+            user = resp_elements[2].data
+            property = resp_elements[3].data
+            # properties = [resp_element.data for resp_element in resp_elements[3:]]
+            return commands.AclSetuserCommand(raw_cmd, user, property)
+
         else:
             raise Exception(f"unknown ACL command {raw_cmd=}")
     else:
