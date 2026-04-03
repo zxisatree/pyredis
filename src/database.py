@@ -19,7 +19,6 @@ import singleton_meta
 from utils import (
     ConnId,
     ThreadsafeDefaultdict,
-    ThreadsafeDict,
     decode_score,
     haversines,
     transform_to_execute_output,
@@ -109,10 +108,10 @@ class Database(metaclass=singleton_meta.SingletonMeta):
             return "none"
 
     def __init__(self, dir: str, dbfilename: str):
-        self.store: ThreadsafeDict[
+        self.store: dict[
             bytes, Database.StrVal | Database.StreamVal | Database.ListVal | SortedSet
-        ] = ThreadsafeDict()
-        self.key_types: ThreadsafeDict[bytes, Database.ValType] = ThreadsafeDict()
+        ] = {}
+        self.key_types: dict[bytes, Database.ValType] = {}
         # map of keys of streams to threads waiting for new elements
         self.stream_waitlist: ThreadsafeDefaultdict[
             bytes, tuple[Lock, set[Semaphore]]
@@ -122,7 +121,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
             ThreadsafeDefaultdict(Condition)
         )
         # xacts can only be started explicitly through a single function, so we avoid the overhead of a defaultdict here
-        self.xacts: ThreadsafeDict[ConnId, list[interfaces.Command]] = ThreadsafeDict()
+        self.xacts: dict[ConnId, list[interfaces.Command]] = {}
         self.channels: ThreadsafeDefaultdict[ConnId, set[bytes]] = (
             ThreadsafeDefaultdict(set)
         )

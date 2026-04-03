@@ -1,7 +1,7 @@
 from collections import defaultdict
 from math import radians, sin, cos, sqrt, asin
 import socket
-from threading import Lock, RLock
+from threading import RLock
 from typing import Generic, TypeVar
 
 import constants
@@ -90,42 +90,6 @@ KT = TypeVar("KT")
 VT = TypeVar("VT")
 
 
-class ThreadsafeDict(dict, Generic[KT, VT]):
-    """Coarse locking wrapper over a dict"""
-
-    def __init__(self, *args, **kwargs):
-        self.lock = Lock()
-        super().__init__(*args, **kwargs)
-
-    def __getitem__(self, key: KT) -> VT:
-        with self.lock:
-            return super().__getitem__(key)
-
-    def __setitem__(self, key: KT, value: VT):
-        with self.lock:
-            return super().__setitem__(key, value)
-
-    def __contains__(self, key: KT) -> bool:
-        # dict methods should be atomic
-        return super().__contains__(key)
-        # with self.lock:
-        #     return super().__contains__(key)
-
-    def __len__(self) -> int:
-        with self.lock:
-            return super().__len__()
-
-    def __delitem__(self, key: KT):
-        with self.lock:
-            return super().__delitem__(key)
-
-    def __str__(self) -> str:
-        return super().__str__()
-
-    def __repr__(self) -> str:
-        return f"ThreadsafeDict{super().__repr__()}"
-
-
 class ThreadsafeDefaultdict(defaultdict, Generic[KT, VT]):
     """Coarse locking wrapper over a defaultdict"""
 
@@ -143,10 +107,8 @@ class ThreadsafeDefaultdict(defaultdict, Generic[KT, VT]):
             return super().__setitem__(key, value)
 
     def __contains__(self, key: KT) -> bool:
-        # dict methods should be atomic
-        return super().__contains__(key)
-        # with self.lock:
-        #     return super().__contains__(key)
+        with self.lock:
+            return super().__contains__(key)
 
     def __len__(self) -> int:
         with self.lock:
@@ -161,74 +123,3 @@ class ThreadsafeDefaultdict(defaultdict, Generic[KT, VT]):
 
     def __repr__(self) -> str:
         return f"ThreadsafeDefaultdict{super().__repr__()}"
-
-
-# class Node:
-#     def __init__(
-#         self,
-#         name: bytes,
-#         score: float,
-#         left: "Self | None",
-#         right: "Self | None",
-#         is_black: bool,
-#     ):
-#         self.name = name
-#         self.score = score
-#         if left is not None:
-#             self.left = left
-#         if right is not None:
-#             self.right = right
-#         self.is_black = True
-#         self.parent: "Self" = self
-
-
-# class SortedSet:
-#     # Red black tree with unique keys
-#     def __init__(self):
-#         self.root = None
-#         self.name_map = {}
-
-#     def insert(self, node: Node):
-#         self.name_map[node.name] = node
-#         if self.root is None:
-#             self.root = node
-#         node.is_black = False  # new nodes are red
-#         return self._insert(self.root, node)
-
-#     def _insert(self, ref: Node, node: Node):
-#         if node.score > ref.score:
-#             if not ref.right:
-#                 node.parent = ref
-#                 ref.right = node
-#                 if not ref.is_black:
-#                     self._fix_violations(ref)
-#             else:
-#                 return self._insert(ref.right, node)
-#         elif node.score < ref.score:
-#             if not ref.left:
-#                 node.parent = ref
-#                 ref.left = node
-#                 if not ref.is_black:
-#                     self._fix_violations(ref)
-#             else:
-#                 return self._insert(ref.left, node)
-#         else:
-#             raise NotImplementedError("SortedSet should have unique names and scores")
-
-#     def _fix_violations(self, node: Node):
-#         pass
-
-#     def delete(self, name: bytes):
-#         pass
-#         # node = self.name_map[name]
-#         # parent = node.parent
-#         # if parent.left == node:
-#         #     # need to connect to node's children
-#         #     parent.left = None
-#         # if parent.right == node:
-#         #     parent.right = None
-
-#     def search(self, name: bytes):
-#         if name not in self.name_map:
-#             return None
-#         return self.name_map[name]
