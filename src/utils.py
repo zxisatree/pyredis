@@ -2,7 +2,7 @@ from collections import defaultdict
 from math import radians, sin, cos, sqrt, asin
 import socket
 from threading import Lock, RLock
-from typing import Generic, TypeVar, Self
+from typing import Generic, TypeVar
 
 import constants
 

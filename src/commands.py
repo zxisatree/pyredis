@@ -1219,6 +1219,32 @@ class AclWhoamiCommand(Command):
         )
 
 
+class AclGetuserCommand(Command):
+    expected_arg_count = [1]
+
+    def __init__(self, raw_cmd: bytes, user: bytes):
+        self._raw_cmd = raw_cmd
+        self.user = user
+        self._keyword = b"ACL"
+
+    def execute(self, db, replica_handler, conn):
+        return RespArray(
+            [
+                RespBulkString(b"flags"),
+                RespArray([RespBulkString(b"nopass")]),
+                RespBulkString(b"passwords"),
+                RespArray([]),
+            ]
+        ).encode_to_list()
+
+    @classmethod
+    def craft_request(cls, *args: str):
+        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
+        return AclWhoamiCommand(
+            craft_command("ACL WHOAMI", *args).encode(),
+        )
+
+
 def verify_arg_count(
     command_name: str, expected_arg_count: Iterable[int], args_len: int
 ):

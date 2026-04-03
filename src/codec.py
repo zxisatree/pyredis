@@ -280,8 +280,12 @@ def parse_resp_cmd(
     elif cmd_str.startswith(b"REDIS"):
         return commands.RdbFileCommand(raw_cmd)
     elif cmd_str == b"ACL":
-        if resp_elements[1].data.upper() == b"WHOAMI":
+        subcmd = resp_elements[1].data.upper()
+        if subcmd == b"WHOAMI":
             return commands.AclWhoamiCommand(raw_cmd)
+        elif subcmd == b"GETUSER":
+            user = resp_elements[2].data
+            return commands.AclGetuserCommand(raw_cmd, user)
         else:
             raise Exception(f"unknown ACL command {raw_cmd=}")
     else:
