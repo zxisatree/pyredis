@@ -96,6 +96,7 @@ def handle_conn(
     db: database.Database,
     replica_handler: replicas.ReplicaHandler,
 ):
+    conn_id = construct_conn_id(conn)
     with conn:
         while True:
             data = conn.recv(constants.BUFFER_SIZE)
@@ -105,7 +106,7 @@ def handle_conn(
             cmds = codec.parse_cmd(data)
             logger.info(f"{cmds=}")
             for cmd in cmds:
-                execute_cmd(cmd, db, replica_handler, conn)
+                execute_cmd(cmd, db, replica_handler, conn, conn_id)
 
         logger.info(f"Connection closed: {addr=}")
 
@@ -115,8 +116,8 @@ def execute_cmd(
     db: database.Database,
     replica_handler: replicas.ReplicaHandler,
     conn: socket.socket,
+    conn_id: tuple[int, str],
 ):
-    conn_id = construct_conn_id(conn)
     in_xact = db.xact_exists(conn_id)
     in_subscribed_mode = db.in_subscribed_mode(conn_id)
 

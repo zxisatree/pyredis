@@ -279,5 +279,10 @@ def parse_resp_cmd(
         )
     elif cmd_str.startswith(b"REDIS"):
         return commands.RdbFileCommand(raw_cmd)
+    elif cmd_str == b"ACL":
+        if resp_elements[1].data.upper() == b"WHOAMI":
+            return commands.AclWhoamiCommand(raw_cmd)
+        else:
+            raise Exception(f"unknown ACL command {raw_cmd=}")
     else:
         raise Exception(f"skipping unknown command {raw_cmd=}")

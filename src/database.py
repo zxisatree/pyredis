@@ -61,7 +61,7 @@ class SortedSet:
                 return item.score
         return -1
 
-    def add_item(self, item: Item) -> int:
+    def upsert_item(self, item: Item) -> int:
         if item.name in self.names:
             for stored_item in self.set:
                 if stored_item.name == item.name:
@@ -73,7 +73,7 @@ class SortedSet:
             return 1
 
     def add(self, name: bytes, score: float) -> int:
-        return self.add_item(SortedSet.Item(score, name))
+        return self.upsert_item(SortedSet.Item(score, name))
 
     def remove(self, name: bytes) -> int:
         for idx, item in enumerate(self.set):

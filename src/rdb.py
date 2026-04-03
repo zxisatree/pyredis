@@ -42,9 +42,9 @@ class RdbFile:
     def read_length_encoding(self) -> tuple[int, int, int]:
         length_encoding = self.read(1)
         return (
-            int.from_bytes(length_encoding) >> 7,
-            (int.from_bytes(length_encoding) >> 6) & 1,
-            int.from_bytes(length_encoding) & 0x3F,
+            int.from_bytes(length_encoding, "big") >> 7,
+            (int.from_bytes(length_encoding, "big") >> 6) & 1,
+            int.from_bytes(length_encoding, "big") & 0x3F,
         )
 
     def read_length_encoded_integer(self) -> tuple[int, bool]:
@@ -71,7 +71,7 @@ class RdbFile:
         length, is_int = self.read_length_encoded_integer()
         val = self.read(length)
         if is_int:
-            return str(int.from_bytes(val)).encode()
+            return str(int.from_bytes(val, "big")).encode()
         else:
             return val
 

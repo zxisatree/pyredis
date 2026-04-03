@@ -45,7 +45,7 @@ class PingCommand(Command):
         conn_id = construct_conn_id(conn)
         if db.in_subscribed_mode(conn_id):
             return RespArray(
-                [RespSimpleString(b"pong"), RespBulkString(b"")]
+                [RespBulkString(b"pong"), RespBulkString(b"")]
             ).encode_to_list()
         else:
             return RespSimpleString(b"PONG").encode_to_list()
@@ -65,7 +65,7 @@ class EchoCommand(Command):
         self._keyword = b"ECHO"
 
     def execute(self, db, replica_handler, conn):
-        return RespSimpleString(self.msg).encode_to_list()
+        return RespBulkString(self.msg).encode_to_list()
 
     @classmethod
     def craft_request(cls, *args: str):
@@ -1198,6 +1198,24 @@ class GeosearchCommand(Command):
             args[4].encode(),
             float(args[5].encode()),
             args[6].encode(),
+        )
+
+
+class AclWhoamiCommand(Command):
+    expected_arg_count = [0]
+
+    def __init__(self, raw_cmd: bytes):
+        self._raw_cmd = raw_cmd
+        self._keyword = b"ACL"
+
+    def execute(self, db, replica_handler, conn):
+        return RespBulkString(b"default").encode_to_list()
+
+    @classmethod
+    def craft_request(cls, *args: str):
+        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
+        return AclWhoamiCommand(
+            craft_command("ACL WHOAMI", *args).encode(),
         )
 
 
