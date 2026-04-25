@@ -134,6 +134,12 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         self.authenticated_sessions: ThreadsafeDefaultdict[
             ConnId, tuple[bytes, bytes]
         ] = ThreadsafeDefaultdict(lambda: (b"default", b""))
+        self.watched_keys: ThreadsafeDefaultdict[ConnId, dict[bytes, int]] = (
+            ThreadsafeDefaultdict(dict)
+        )
+        self.key_versions: ThreadsafeDefaultdict[bytes, int] = ThreadsafeDefaultdict(
+            int
+        )
 
         self.dir = dir
         self.dbfilename = dbfilename
@@ -196,6 +202,10 @@ class Database(metaclass=singleton_meta.SingletonMeta):
     def set_string_value(self, key: bytes, value: StrVal):
         self.key_types[key] = Database.ValType.STRING
         self.store[key] = value
+        # print(
+        #     f"set_string_value incrementing version of {key} from {self.key_versions[key]} to {self.key_versions[key] + 1}"
+        # )
+        self.key_versions[key] += 1
 
     def get_type(self, key: bytes) -> ValType:
         if key not in self.store:
@@ -236,8 +246,18 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         self.xacts[conn_id].append(cmd)
 
     def exec_xact(self, conn_id: ConnId) -> list[interfaces.Command]:
-        res = self.xacts.pop(conn_id)
-        return res
+        return self.xacts.pop(conn_id)
+
+    def watch_key(self, conn_id: ConnId, key: bytes):
+        self.watched_keys[conn_id][key] = self.key_versions[key]
+
+    def check_watched_keys(self, conn_id: ConnId) -> bool:
+        watched_versions = self.watched_keys.pop(conn_id, {})
+        for key, version in watched_versions.items():
+            # print(f"{key=}, {version=}, {self.key_versions.get(key, 0)=}")
+            if self.key_versions.get(key, 0) != version:
+                return True
+        return False
 
     def in_subscribed_mode(self, conn_id: ConnId) -> bool:
         return conn_id in self.channels
