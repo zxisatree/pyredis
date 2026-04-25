@@ -15,6 +15,7 @@ import commands
 import constants
 import database
 import data_types
+import interfaces
 from logs import logger
 from utils import construct_conn_id, transform_to_execute_output
 import replicas
@@ -124,7 +125,11 @@ def execute_cmd(
 
     if not is_conn_authenticated and not cmd.allowed_while_unauthenticated:
         executed = transform_to_execute_output(constants.NOAUTH_ERROR)
-    elif in_xact and not cmd.allowed_in_xact:
+    elif in_xact and cmd.xact_behaviour == interfaces.XactBehaviour.ERROR:
+        executed = data_types.RespSimpleError(
+            f"ERR {cmd.keyword.decode().lower()} inside MULTI is not allowed".encode()
+        ).encode_to_list()
+    elif in_xact and cmd.xact_behaviour == interfaces.XactBehaviour.QUEUE:
         db.queue_xact_cmd(conn_id, cmd)
         executed = transform_to_execute_output(constants.XACT_QUEUED_RESPONSE)
     elif in_subscribed_mode and not cmd.allowed_in_subscribed_mode:

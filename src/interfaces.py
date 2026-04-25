@@ -1,5 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -9,9 +10,15 @@ if TYPE_CHECKING:
     import replicas
 
 
+class XactBehaviour(Enum):
+    QUEUE = "queue"
+    EXECUTE = "execute"
+    ERROR = "error"
+
+
 class Command(ABC):
     allowed_in_subscribed_mode = False
-    allowed_in_xact = False
+    xact_behaviour = XactBehaviour.QUEUE
     allowed_while_unauthenticated = False
     propogated_to_replicas = False
 

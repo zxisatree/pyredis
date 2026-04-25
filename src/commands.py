@@ -12,7 +12,7 @@ from data_types import (
     RespRdbFile,
 )
 import exceptions
-from interfaces import Command
+from interfaces import Command, XactBehaviour
 from logs import logger
 from utils import encode_score, construct_conn_id, transform_to_execute_output
 
@@ -283,13 +283,13 @@ class PsyncCommand(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"FULLRESYNC"
+        self._keyword = b"PSYNC"
 
     def execute(self, db, replica_handler, conn):
         replica_handler.add_slave(conn)
         return [
             RespSimpleString(
-                f"FULLRESYNC {replica_handler.ip} {replica_handler.master_repl_offset}".encode()
+                f"FULLRESYNC {replica_handler.master_replid} {replica_handler.master_repl_offset}".encode()
             ).encode(),
             RespRdbFile(constants.EMPTY_RDB_FILE).encode(),
         ]
@@ -482,7 +482,7 @@ class MultiCommand(Command):
 
 class ExecCommand(Command):
     expected_arg_count = [0]
-    allowed_in_xact = True
+    xact_behaviour = XactBehaviour.EXECUTE
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
@@ -511,7 +511,7 @@ class ExecCommand(Command):
 
 class DiscardCommand(Command):
     expected_arg_count = [0]
-    allowed_in_xact = True
+    xact_behaviour = XactBehaviour.EXECUTE
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
@@ -1245,7 +1245,7 @@ class AclGetuserCommand(Command):
     def craft_request(cls, *args: str):
         verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
         return AclGetuserCommand(
-            craft_command("ACL WHOAMI", *args).encode(),
+            craft_command("ACL GETUSER", *args).encode(),
             args[0].encode(),
         )
 
@@ -1273,7 +1273,7 @@ class AclSetuserCommand(Command):
     def craft_request(cls, *args: str):
         verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
         return AclSetuserCommand(
-            craft_command("ACL WHOAMI", *args).encode(),
+            craft_command("ACL SETUSER", *args).encode(),
             args[0].encode(),
             args[1].encode(),
         )
@@ -1287,7 +1287,7 @@ class AuthCommand(Command):
         self._raw_cmd = raw_cmd
         self.user = user
         self.password = password
-        self._keyword = b"ACL"
+        self._keyword = b"AUTH"
 
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
@@ -1303,9 +1303,30 @@ class AuthCommand(Command):
     def craft_request(cls, *args: str):
         verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
         return AuthCommand(
-            craft_command("ACL WHOAMI", *args).encode(),
+            craft_command("AUTH", *args).encode(),
             args[0].encode(),
             args[1].encode(),
+        )
+
+
+class WatchCommand(Command):
+    expected_arg_count = [1]
+    xact_behaviour = XactBehaviour.ERROR
+
+    def __init__(self, raw_cmd: bytes, key: bytes):
+        self._raw_cmd = raw_cmd
+        self.key = key
+        self._keyword = b"WATCH"
+
+    def execute(self, db, replica_handler, conn):
+        return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
+
+    @classmethod
+    def craft_request(cls, *args: str):
+        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
+        return WatchCommand(
+            craft_command("WATCH", *args).encode(),
+            args[0].encode(),
         )
 
 

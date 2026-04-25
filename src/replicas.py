@@ -1,4 +1,4 @@
-import uuid
+import secrets
 import socket
 from enum import Enum
 
@@ -33,7 +33,7 @@ class ReplicaHandler(metaclass=singleton_meta.SingletonMeta):
     ):
         self.is_master = is_master
         self.ack_count = 0
-        self.id = str(uuid.uuid4())
+        # self.id = str(uuid.uuid4())
         self.ip = ip
         self.port = port
         if replica_of:
@@ -42,7 +42,7 @@ class ReplicaHandler(metaclass=singleton_meta.SingletonMeta):
         self.slaves: list[socket.socket] = []
         self.connected_slaves = 0
         self.role = "master" if is_master else "slave"
-        self.master_replid = self.id if is_master else "?"
+        self.master_replid = secrets.token_hex(20) if is_master else "?"
         self.master_repl_offset = 0
         self.handshake_state = ReplicaHandler.ReplicaHandshakeState.READY
         self.db = db
