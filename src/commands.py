@@ -492,8 +492,8 @@ class ExecCommand(Command):
         conn_id = construct_conn_id(conn)
         if not db.xact_exists(conn_id):
             return RespSimpleError(b"ERR EXEC without MULTI").encode_to_list()
-        cmds = db.exec_xact(conn_id)
         has_any_version_changed = db.check_watched_keys(conn_id)
+        cmds = db.pop_xact_for_exec(conn_id)
         if has_any_version_changed:
             return RespArray(None).encode_to_list()
 
@@ -525,7 +525,7 @@ class DiscardCommand(Command):
         conn_id = construct_conn_id(conn)
         if not db.xact_exists(conn_id):
             return RespSimpleError(b"ERR DISCARD without MULTI").encode_to_list()
-        db.exec_xact(conn_id)
+        db.pop_xact_for_exec(conn_id)
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
 
     @classmethod

@@ -202,9 +202,6 @@ class Database(metaclass=singleton_meta.SingletonMeta):
     def set_string_value(self, key: bytes, value: StrVal):
         self.key_types[key] = Database.ValType.STRING
         self.store[key] = value
-        # print(
-        #     f"set_string_value incrementing version of {key} from {self.key_versions[key]} to {self.key_versions[key] + 1}"
-        # )
         self.key_versions[key] += 1
 
     def get_type(self, key: bytes) -> ValType:
@@ -245,7 +242,9 @@ class Database(metaclass=singleton_meta.SingletonMeta):
     def queue_xact_cmd(self, conn_id: ConnId, cmd: interfaces.Command):
         self.xacts[conn_id].append(cmd)
 
-    def exec_xact(self, conn_id: ConnId) -> list[interfaces.Command]:
+    def pop_xact_for_exec(self, conn_id: ConnId) -> list[interfaces.Command]:
+        if conn_id in self.watched_keys:
+            del self.watched_keys[conn_id]
         return self.xacts.pop(conn_id)
 
     def watch_key(self, conn_id: ConnId, key: bytes):
@@ -255,9 +254,8 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         del self.watched_keys[conn_id]
 
     def check_watched_keys(self, conn_id: ConnId) -> bool:
-        watched_versions = self.watched_keys.pop(conn_id, {})
+        watched_versions = self.watched_keys.get(conn_id, {})
         for key, version in watched_versions.items():
-            # print(f"{key=}, {version=}, {self.key_versions.get(key, 0)=}")
             if self.key_versions.get(key, 0) != version:
                 return True
         return False
