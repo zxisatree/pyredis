@@ -1314,7 +1314,6 @@ class AuthCommand(Command):
 
 
 class WatchCommand(Command):
-    expected_arg_count = [1]
     xact_behaviour = XactBehaviour.ERROR
 
     def __init__(self, raw_cmd: bytes, keys: list[bytes]):
@@ -1332,11 +1331,31 @@ class WatchCommand(Command):
     def craft_request(cls, *args: str):
         args_len = len(args)
         if args_len < 2:
-            error_msg = f"{cls.__name__} takes at least 2 arguments, but {args_len} {'was' if args_len == 1 else 'were'} provided"
+            error_msg = f"{cls.__name__} takes at least 1 arguments, but {args_len} {'was' if args_len == 1 else 'were'} provided"
             raise exceptions.RequestCraftError(error_msg)
         return WatchCommand(
             craft_command("WATCH", *args).encode(),
             [arg.encode() for arg in args[0:]],
+        )
+
+
+class UnwatchCommand(Command):
+    expected_arg_count = [0]
+
+    def __init__(self, raw_cmd: bytes):
+        self._raw_cmd = raw_cmd
+        self._keyword = b"UNWATCH"
+
+    def execute(self, db, replica_handler, conn):
+        conn_id = construct_conn_id(conn)
+        db.clear_watched_keys(conn_id)
+        return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
+
+    @classmethod
+    def craft_request(cls, *args: str):
+        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
+        return UnwatchCommand(
+            craft_command("UNWATCH", *args).encode(),
         )
 
 

@@ -303,5 +303,7 @@ def parse_resp_cmd(
             raw_cmd,
             keys,
         )
+    elif cmd_str == b"UNWATCH":
+        return commands.UnwatchCommand(raw_cmd)
     else:
         raise Exception(f"skipping unknown command {raw_cmd=}")

@@ -251,6 +251,9 @@ class Database(metaclass=singleton_meta.SingletonMeta):
     def watch_key(self, conn_id: ConnId, key: bytes):
         self.watched_keys[conn_id][key] = self.key_versions[key]
 
+    def clear_watched_keys(self, conn_id: ConnId):
+        del self.watched_keys[conn_id]
+
     def check_watched_keys(self, conn_id: ConnId) -> bool:
         watched_versions = self.watched_keys.pop(conn_id, {})
         for key, version in watched_versions.items():
