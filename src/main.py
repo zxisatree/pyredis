@@ -7,9 +7,10 @@ from typing import Sequence
 from sys import path
 from pathlib import Path
 
-# modify path to call files in parent folder
+# if app is called from parent folder, modify path to call files in parent folder
 path.append(str(Path(__file__).parent))
 
+import aof
 import codec
 import commands
 import constants
@@ -33,46 +34,48 @@ def main(args: Sequence[str] | None = None):
         appendfilename,
         appendfsync,
     ) = validate_parse_args(setup_argparser().parse_args(args))
-    db = database.Database(
-        rdbdir, dbfilename, appendonly, appenddirname, appendfilename, appendfsync
-    )
-    replica_handler = replicas.ReplicaHandler(
-        False if replicaof else True, "localhost", port, replicaof, db
-    )
-    # attempt to connect to master
-    if replicaof:
-        threading.Thread(target=replica_handler.master_recv_loop).start()
-
-    # for signalling to the accepting thread to close
-    # automatically cleaned up after program exits
-    read_socket, write_socket = socket.socketpair()
-
-    logger.info(f"Started server on {port=}")
-    try:
-        accept_thread = threading.Thread(
-            target=accept_conns, args=(read_socket, port, db, replica_handler)
+    with aof.AofHandler(
+        rdbdir, appendonly, appenddirname, appendfilename, appendfsync
+    ) as aof_handler:
+        db = database.Database(rdbdir, dbfilename, aof_handler)
+        replica_handler = replicas.ReplicaHandler(
+            False if replicaof else True, "localhost", port, replicaof, db
         )
-        logger.info("starting thread")
-        accept_thread.start()
-        # wait indefinitely, but keep stdin open
-        while True:
-            input()
-    except (KeyboardInterrupt, EOFError):
-        # keyboard interrupts are EOFErrors during input on pwsh nested in bash in a vscode terminal
-        pass
-    finally:
-        logger.info("cleaning up...")
-        write_socket.close()
-        logger.info(
-            f"closed write socket, waiting for accept_thread to join in {constants.CONN_TIMEOUT}s..."
-        )
-        # wait for accept_thread only if it has been created
+        # attempt to connect to master
+        if replicaof:
+            threading.Thread(target=replica_handler.master_recv_loop).start()
+
+        # for signalling to the accepting thread to close
+        # automatically cleaned up after program exits
+        read_socket, write_socket = socket.socketpair()
+
+        logger.info(f"Started server on {port=}")
         try:
-            accept_thread.join()
-        except (UnboundLocalError, RuntimeError):
-            # UnboundLocalError: if variable has not been created, RuntimeError: thread has not been started
+            accept_thread = threading.Thread(
+                target=accept_conns,
+                args=(read_socket, port, db, replica_handler, aof_handler),
+            )
+            logger.info("starting thread")
+            accept_thread.start()
+            # wait indefinitely, but keep stdin open
+            while True:
+                input()
+        except (KeyboardInterrupt, EOFError):
+            # keyboard interrupts are EOFErrors during input on pwsh nested in bash in a vscode terminal
             pass
-        logger.info("accept_thread joined.")
+        finally:
+            logger.info("cleaning up...")
+            write_socket.close()
+            logger.info(
+                f"closed write socket, waiting for accept_thread to join in {constants.CONN_TIMEOUT}s..."
+            )
+            # wait for accept_thread only if it has been created
+            try:
+                accept_thread.join()
+            except (UnboundLocalError, RuntimeError):
+                # UnboundLocalError: if variable has not been created, RuntimeError: thread has not been started
+                pass
+            logger.info("accept_thread joined.")
 
 
 def accept_conns(
@@ -80,6 +83,7 @@ def accept_conns(
     port: int,
     db: database.Database,
     replica_handler: replicas.ReplicaHandler,
+    aof_handler: aof.AofHandler,
 ):
     try:
         server_socket = socket.create_server(("localhost", port))
@@ -91,7 +95,8 @@ def accept_conns(
                     break
                 conn, addr = server_socket.accept()
                 thread = threading.Thread(
-                    target=handle_conn, args=(conn, addr, db, replica_handler)
+                    target=handle_conn,
+                    args=(conn, addr, db, replica_handler, aof_handler),
                 )
                 thread.daemon = True
                 thread.start()
@@ -106,6 +111,7 @@ def handle_conn(
     addr,
     db: database.Database,
     replica_handler: replicas.ReplicaHandler,
+    aof_handler: aof.AofHandler,
 ):
     conn_id = construct_conn_id(conn)
     with conn:
@@ -117,7 +123,7 @@ def handle_conn(
             cmds = codec.parse_cmd(data)
             logger.info(f"{cmds=}")
             for cmd in cmds:
-                execute_cmd(cmd, db, replica_handler, conn, conn_id)
+                execute_cmd(cmd, db, replica_handler, aof_handler, conn, conn_id)
 
         logger.info(f"Connection closed: {addr=}")
 
@@ -126,6 +132,7 @@ def execute_cmd(
     cmd: commands.Command,
     db: database.Database,
     replica_handler: replicas.ReplicaHandler,
+    aof_handler: aof.AofHandler,
     conn: socket.socket,
     conn_id: tuple[int, str],
 ):
@@ -147,8 +154,10 @@ def execute_cmd(
             f"ERR Can't execute '{cmd.keyword.decode().lower()}': only SUBSCRIBE / UNSUBSCRIBE / PING / QUIT / RESET are allowed in subscribed mode".encode()
         ).encode_to_list()
     else:
-        if cmd.propogated_to_replicas:
+        if cmd.should_propogate_to_replicas:
             replica_handler.propogate(cmd._raw_cmd)
+        if cmd.should_write_to_aof:
+            aof_handler.write(cmd.raw_cmd)
         executed = cmd.execute(db, replica_handler, conn)
 
     for resp in executed:
@@ -168,12 +177,22 @@ def execute_cmd(
 
 def validate_parse_args(
     args: argparse.Namespace,
-) -> tuple[int, tuple[str, int] | None, str, str, bool, str, str, str]:
+) -> tuple[
+    int,
+    tuple[str, int] | None,
+    str,
+    str,
+    bool,
+    str,
+    str,
+    aof.AppendFsyncOption,
+]:
     """Throws ArgParseError if validation fails"""
     if args.port < 0 or args.port > 65535:
         raise ArgParseError(
             f"Invalid port number {args.port}, should be between 0 and 65535"
         )
+
     replicaof = None
     if args.replicaof is not None:
         replica_host, replica_port = args.replicaof.split(" ")
@@ -182,6 +201,7 @@ def validate_parse_args(
         except ValueError:
             raise ArgParseError("replicaof port is not an integer")
         replicaof = (replica_host, replicaof_int)
+
     if args.appendonly == "no":
         appendonly = False
     elif args.appendonly == "yes":
@@ -190,6 +210,12 @@ def validate_parse_args(
         raise ArgParseError(
             f"Invalid appendonly option {args.appendonly}, should be one of ('no', 'yes')"
         )
+
+    if args.appendfsync == "always":
+        appendfsync = aof.AppendFsyncOption.ALWAYS
+    elif args.appendfsync == "everysec":
+        appendfsync = aof.AppendFsyncOption.EVERYSEC
+
     return (
         args.port,
         replicaof,
@@ -198,7 +224,7 @@ def validate_parse_args(
         appendonly,
         args.appenddirname,
         args.appendfilename,
-        args.appendfsync,
+        appendfsync,
     )
 
 

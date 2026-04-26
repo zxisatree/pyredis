@@ -20,7 +20,8 @@ class Command(ABC):
     allowed_in_subscribed_mode = False
     xact_behaviour = XactBehaviour.QUEUE
     allowed_while_unauthenticated = False
-    propogated_to_replicas = False
+    should_propogate_to_replicas = False
+    should_write_to_aof = False
 
     def __init__(self):
         self._raw_cmd = b""

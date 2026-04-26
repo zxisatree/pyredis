@@ -10,6 +10,7 @@ import time
 from typing import cast
 from dataclasses import dataclass
 
+import aof
 import interfaces
 import constants
 from data_types import RespArray, RespBulkString, RespDataType
@@ -111,10 +112,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         self,
         dir: str,
         dbfilename: str,
-        append_only: bool,
-        append_dirname: str,
-        append_filename: str,
-        append_fsync: str,
+        aof_handler: aof.AofHandler,
     ):
         self.store: dict[
             bytes, Database.StrVal | Database.StreamVal | Database.ListVal | SortedSet
@@ -151,10 +149,6 @@ class Database(metaclass=singleton_meta.SingletonMeta):
 
         self.dir = dir
         self.dbfilename = dbfilename
-        self.append_only = append_only
-        self.append_dirname = append_dirname
-        self.append_filename = append_filename
-        self.append_fsync = append_fsync
         rdb_file_path = Path(self.dir) / self.dbfilename
         if rdb_file_path.exists():
             with rdb_file_path.open("rb") as f:
@@ -162,17 +156,8 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         else:
             self.rdb = rdb.RdbFile(constants.EMPTY_RDB_FILE)
         self.init_from_rdb(self.rdb)
-        self.aof_dir_path = Path(self.dir) / self.append_dirname
-        self.aof_file_path = self.aof_dir_path / (self.append_filename + ".1.incr.aof")
-        if self.append_only and not self.aof_file_path.exists():
-            self.aof_dir_path.mkdir(parents=True, exist_ok=True)
-            self.aof_file_path.touch(exist_ok=True)
-        self.manifest_file_path = self.aof_dir_path / (
-            self.append_filename + ".manifest"
-        )
-        if self.append_only:
-            with self.manifest_file_path.open("w") as f:
-                f.write(f"file {self.aof_file_path.name} seq 1 type i")
+
+        self.aof_handler = aof_handler
 
         logger.info(f"db initialised with {self.store=}")
 
@@ -183,13 +168,13 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         elif uppercase_key == b"DBFILENAME":
             return self.dbfilename
         elif uppercase_key == b"APPENDONLY":
-            return "yes" if self.append_only else "no"
+            return "yes" if self.aof_handler.append_only else "no"
         elif uppercase_key == b"APPENDDIRNAME":
-            return self.append_dirname
+            return self.aof_handler.append_dirname
         elif uppercase_key == b"APPENDFILENAME":
-            return self.append_filename
+            return self.aof_handler.append_filename
         elif uppercase_key == b"APPENDFSYNC":
-            return self.append_fsync
+            return self.aof_handler.append_fsync.value
         else:
             return None
 

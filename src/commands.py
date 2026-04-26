@@ -78,7 +78,8 @@ class EchoCommand(Command):
 
 class SetCommand(Command):
     expected_arg_count = [2, 3]
-    propogated_to_replicas = True
+    should_propogate_to_replicas = True
+    should_write_to_aof = True
 
     def __init__(
         self,
@@ -257,7 +258,7 @@ class ReplConfAckCommand(Command):
 
 class ReplConfGetAckCommand(Command):
     expected_arg_count = [0]
-    propogated_to_replicas = True
+    should_propogate_to_replicas = True
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
