@@ -333,7 +333,7 @@ class RdbFileCommand(Command):
 
     # slave received a RDB file
     def execute(self, db, replica_handler, conn):
-        db.init_from_rdb(self.rdbfile.data)
+        db.init_from_rdb(self.rdbfile.key_values)
         return []
 
     @classmethod
@@ -383,7 +383,7 @@ class KeysCommand(Command):
             list(
                 map(
                     RespBulkString,
-                    db.rdb.key_values.keys(),
+                    db.store.keys(),
                 )
             )
         ).encode_to_list()

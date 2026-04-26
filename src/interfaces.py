@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from enum import Enum
 import exceptions
 from typing import TYPE_CHECKING
+import functools
+from datetime import datetime
 
 if TYPE_CHECKING:
     import socket
@@ -15,6 +17,70 @@ class XactBehaviour(Enum):
     QUEUE = "queue"
     EXECUTE = "execute"
     ERROR = "error"
+
+
+@functools.total_ordering
+class StreamId:
+    """ID of a stream entry"""
+
+    def __init__(self, id_str: str):
+        milliseconds_time, seq_no = id_str.split("-")
+        self.milliseconds_time = milliseconds_time
+        self.seq_no = seq_no
+
+    def __repr__(self) -> str:
+        return f"StreamId({self.milliseconds_time}-{self.seq_no})"
+
+    def __str__(self) -> str:
+        return f"{self.milliseconds_time}-{self.seq_no}"
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, StreamId):
+            return False
+        return (
+            self.milliseconds_time == other.milliseconds_time
+            and self.seq_no == other.seq_no
+        )
+
+    def __lt__(self, other: "StreamId"):
+        if self.milliseconds_time != other.milliseconds_time:
+            return self.milliseconds_time < other.milliseconds_time
+        return self.seq_no < other.seq_no
+
+    @staticmethod
+    def generate_stream_id(id: str, last_id: "StreamId | None") -> "StreamId":
+        if id == "*":
+            # milliseconds_time should be current time in milliseconds
+            milliseconds_time = str(int(datetime.now().timestamp() * 1000))
+            if not last_id:
+                return StreamId(f"{milliseconds_time}-0")
+            if last_id.milliseconds_time == milliseconds_time:
+                return last_id.next_seq_id()
+            return StreamId(f"{milliseconds_time}-0")
+
+        splitted = id.split("-")
+        if len(splitted) != 2:
+            raise Exception(f"Invalid stream id {id}")
+        milliseconds_time, seq_no = splitted
+        if not last_id:
+            if seq_no == "*":
+                seq_no = "1" if milliseconds_time == "0" else "0"
+            return StreamId(f"{milliseconds_time}-{seq_no}")
+
+        if seq_no == "*":
+            if milliseconds_time == last_id.milliseconds_time:
+                seq_no = str(int(last_id.seq_no) + 1)
+            else:
+                seq_no = "1" if milliseconds_time == "0" else "0"
+        return StreamId(f"{milliseconds_time}-{seq_no}")
+
+    def next_seq_id(self) -> "StreamId":
+        return StreamId(f"{self.milliseconds_time}-{int(self.seq_no) + 1}")
+
+
+StrVal = tuple[str, datetime | None]
+StreamVal = list[tuple[StreamId, dict[str, str]]]
+ListVal = list[bytes]
 
 
 class Command(ABC):

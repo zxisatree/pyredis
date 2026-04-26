@@ -1,21 +1,18 @@
 import bisect
 from datetime import datetime
 from enum import Enum
-import functools
 import hashlib
 import socket
-from pathlib import Path
 from threading import Condition, Lock, Semaphore
 import time
 from typing import cast
 from dataclasses import dataclass
 
-import aof
-import interfaces
+from aof import AofHandler
+from interfaces import Command, StrVal, StreamVal, ListVal, StreamId
 import constants
 from data_types import RespArray, RespBulkString, RespDataType
 from logs import logger
-import rdb
 import singleton_meta
 from utils import (
     ConnId,
@@ -85,10 +82,6 @@ class SortedSet:
 
 
 class Database(metaclass=singleton_meta.SingletonMeta):
-    StrVal = tuple[str, datetime | None]
-    StreamVal = list[tuple["StreamId", dict[str, str]]]
-    ListVal = list[bytes]
-
     class ValType(Enum):
         NONE = 0
         STRING = 1
@@ -112,11 +105,10 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         self,
         dir: str,
         dbfilename: str,
-        aof_handler: aof.AofHandler,
+        rdb_key_values: dict[bytes, StrVal],
+        aof_handler: AofHandler,
     ):
-        self.store: dict[
-            bytes, Database.StrVal | Database.StreamVal | Database.ListVal | SortedSet
-        ] = {}
+        self.store: dict[bytes, StrVal | StreamVal | ListVal | SortedSet] = {}
         self.key_types: dict[bytes, Database.ValType] = {}
         # map of keys of streams to threads waiting for new elements
         self.stream_waitlist: ThreadsafeDefaultdict[
@@ -127,7 +119,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
             ThreadsafeDefaultdict(Condition)
         )
         # xacts can only be started explicitly through a single function, so we avoid the overhead of a defaultdict here
-        self.xacts: dict[ConnId, list[interfaces.Command]] = {}
+        self.xacts: dict[ConnId, list[Command]] = {}
         self.channels: ThreadsafeDefaultdict[ConnId, set[bytes]] = (
             ThreadsafeDefaultdict(set)
         )
@@ -149,16 +141,8 @@ class Database(metaclass=singleton_meta.SingletonMeta):
 
         self.dir = dir
         self.dbfilename = dbfilename
-        rdb_file_path = Path(self.dir).resolve().absolute() / self.dbfilename
-        if rdb_file_path.exists():
-            with rdb_file_path.open("rb") as f:
-                self.rdb = rdb.RdbFile(f.read())
-            self.init_from_rdb(self.rdb)
-        else:
-            self.rdb = rdb.RdbFile(constants.EMPTY_RDB_FILE)
-
+        self.init_from_rdb(rdb_key_values)
         self.aof_handler = aof_handler
-
         logger.info(f"db initialised with {self.store=}")
 
     def __len__(self) -> int:
@@ -172,15 +156,15 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         value = self.store[key]
         match key_type:
             case Database.ValType.STRING:
-                (str_val, expiry) = cast(Database.StrVal, value)
+                (str_val, expiry) = cast(StrVal, value)
                 if expiry and self.expire_one(key):
                     return None
                 return str_val
             case Database.ValType.LIST:
-                list_val = cast(Database.StreamVal, value)
+                list_val = cast(StreamVal, value)
                 return list_val
             case Database.ValType.STREAM:
-                stream_val = cast(Database.StreamVal, value)
+                stream_val = cast(StreamVal, value)
                 return stream_val
             case Database.ValType.SET:
                 set_val = cast(SortedSet, value)
@@ -198,8 +182,8 @@ class Database(metaclass=singleton_meta.SingletonMeta):
     def __repr__(self) -> str:
         return f"Database({repr(self.store)})"
 
-    def init_from_rdb(self, rdb_file: rdb.RdbFile):
-        for key, value in rdb_file.key_values.items():
+    def init_from_rdb(self, key_values: dict[bytes, StrVal]):
+        for key, value in key_values.items():
             self.store[key] = value
             self.key_types[key] = Database.ValType.STRING  # only support strings in RDB
 
@@ -242,7 +226,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         # get_expiry only works for string values
         key_type = self.key_types[key]
         if key_type == Database.ValType.STRING:
-            string_val = cast(Database.StrVal, value)
+            string_val = cast(StrVal, value)
             return string_val[1]
         else:
             raise Exception(f"Called get_expiry on a non string key {key=}")
@@ -253,7 +237,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         key_type = self.key_types[key]
         if key_type != Database.ValType.STRING:
             return False
-        _, expiry = cast(Database.StrVal, value)
+        _, expiry = cast(StrVal, value)
         if expiry and expiry < datetime.now():
             del self.store[key]
             return True
@@ -265,12 +249,10 @@ class Database(metaclass=singleton_meta.SingletonMeta):
     def xact_exists(self, conn_id: ConnId) -> bool:
         return conn_id in self.xacts
 
-    def queue_xact_cmd(self, conn_id: ConnId, cmd: interfaces.Command):
+    def queue_xact_cmd(self, conn_id: ConnId, cmd: Command):
         self.xacts[conn_id].append(cmd)
 
-    def pop_xact_for_exec(
-        self, conn_id: ConnId
-    ) -> tuple[bool, list[interfaces.Command]]:
+    def pop_xact_for_exec(self, conn_id: ConnId) -> tuple[bool, list[Command]]:
         """Returns (if any key versions have changed, list of commands)"""
         has_any_key_version_changed = self.check_watched_keys(conn_id)
         if conn_id in self.watched_keys:
@@ -319,7 +301,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         elif key in self.store and self.key_types[key] != Database.ValType.LIST:
             raise Exception(f"Called rpush on a non list key {key=}")
         self.key_types[key] = Database.ValType.LIST
-        cast(Database.ListVal, self.store[key]).extend(values)
+        cast(ListVal, self.store[key]).extend(values)
         self.list_notify_queue(key)
         return len(self.store[key])
 
@@ -329,7 +311,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         elif key in self.store and self.key_types[key] != Database.ValType.LIST:
             raise Exception(f"Called lpush on a non list key {key=}")
         self.key_types[key] = Database.ValType.LIST
-        self.store[key] = values + cast(Database.ListVal, self.store[key])
+        self.store[key] = values + cast(ListVal, self.store[key])
         self.list_notify_queue(key)
         return len(self.store[key])
 
@@ -364,7 +346,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
     def get_list(self, key: bytes) -> ListVal:
         if self.key_types[key] != Database.ValType.LIST:
             raise Exception("Called get_list on a non list key {key=}")
-        return cast(Database.ListVal, self.store[key])
+        return cast(ListVal, self.store[key])
 
     def key_exists(self, key: bytes) -> bool:
         return key in self.store or key in self.store
@@ -378,7 +360,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         if key_type != Database.ValType.STREAM:
             # should change this error message
             return constants.STREAM_ID_NOT_GREATER_ERROR.encode()
-        value = cast(Database.StreamVal, value)
+        value = cast(StreamVal, value)
 
         if id == "*":
             return None
@@ -409,7 +391,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         self.key_types[key] = Database.ValType.STREAM
         if key not in self.store:
             self.store[key] = []
-        cur_value = cast(Database.StreamVal, self.store[key])
+        cur_value = cast(StreamVal, self.store[key])
         processed_id = StreamId.generate_stream_id(
             id, cur_value[-1][0] if cur_value else None
         )
@@ -425,7 +407,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         key_type = self.key_types[key]
         if key_type != Database.ValType.STREAM:
             return transform_to_execute_output(constants.XOP_ON_NON_STREAM_ERROR)
-        value = cast(Database.StreamVal, value)
+        value = cast(StreamVal, value)
 
         # support - and + queries
         if start == "-":
@@ -503,7 +485,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
             key_type = self.key_types[stream_key]
             if key_type != Database.ValType.STREAM:
                 return transform_to_execute_output(constants.XOP_ON_NON_STREAM_ERROR)
-            value = cast(Database.StreamVal, value)
+            value = cast(StreamVal, value)
             if id == "$":
                 logger.info(f"{original_lens[i]=}")
                 id = str(value[original_lens[i] - 1][0]) if value else "0-0"
@@ -650,62 +632,3 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         if is_authenticated:
             self.authenticated_sessions[conn_id] = (user, hashed_password)
         return is_authenticated
-
-
-@functools.total_ordering
-class StreamId:
-    """ID of a stream entry"""
-
-    def __init__(self, id_str: str):
-        milliseconds_time, seq_no = id_str.split("-")
-        self.milliseconds_time = milliseconds_time
-        self.seq_no = seq_no
-
-    def __repr__(self) -> str:
-        return f"StreamId({self.milliseconds_time}-{self.seq_no})"
-
-    def __str__(self) -> str:
-        return f"{self.milliseconds_time}-{self.seq_no}"
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, StreamId):
-            return False
-        return (
-            self.milliseconds_time == other.milliseconds_time
-            and self.seq_no == other.seq_no
-        )
-
-    def __lt__(self, other: "StreamId"):
-        if self.milliseconds_time != other.milliseconds_time:
-            return self.milliseconds_time < other.milliseconds_time
-        return self.seq_no < other.seq_no
-
-    @staticmethod
-    def generate_stream_id(id: str, last_id: "StreamId | None") -> "StreamId":
-        if id == "*":
-            # milliseconds_time should be current time in milliseconds
-            milliseconds_time = str(int(datetime.now().timestamp() * 1000))
-            if not last_id:
-                return StreamId(f"{milliseconds_time}-0")
-            if last_id.milliseconds_time == milliseconds_time:
-                return last_id.next_seq_id()
-            return StreamId(f"{milliseconds_time}-0")
-
-        splitted = id.split("-")
-        if len(splitted) != 2:
-            raise Exception(f"Invalid stream id {id}")
-        milliseconds_time, seq_no = splitted
-        if not last_id:
-            if seq_no == "*":
-                seq_no = "1" if milliseconds_time == "0" else "0"
-            return StreamId(f"{milliseconds_time}-{seq_no}")
-
-        if seq_no == "*":
-            if milliseconds_time == last_id.milliseconds_time:
-                seq_no = str(int(last_id.seq_no) + 1)
-            else:
-                seq_no = "1" if milliseconds_time == "0" else "0"
-        return StreamId(f"{milliseconds_time}-{seq_no}")
-
-    def next_seq_id(self) -> "StreamId":
-        return StreamId(f"{self.milliseconds_time}-{int(self.seq_no) + 1}")

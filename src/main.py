@@ -21,6 +21,7 @@ import interfaces
 from logs import logger
 from utils import construct_conn_id, transform_to_execute_output
 import replicas
+import rdb
 
 
 def main(args: Sequence[str] | None = None):
@@ -37,7 +38,14 @@ def main(args: Sequence[str] | None = None):
     with aof.AofHandler(
         rdbdir, appendonly, appenddirname, appendfilename, appendfsync
     ) as aof_handler:
-        db = database.Database(rdbdir, dbfilename, aof_handler)
+        rdb_file_path = Path(rdbdir).resolve().absolute() / dbfilename
+        if rdb_file_path.exists():
+            with rdb_file_path.open("rb") as f:
+                rdb_key_values = rdb.RdbParser(f.read()).parse_rdb()
+        else:
+            rdb_key_values = {}
+
+        db = database.Database(rdbdir, dbfilename, rdb_key_values, aof_handler)
         replica_handler = replicas.ReplicaHandler(
             False if replicaof else True, "localhost", port, replicaof, db
         )

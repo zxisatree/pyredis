@@ -18,7 +18,7 @@ def parse_cmd(cmd: bytes) -> list[commands.Command]:
                 # is +FULLRESYNC
                 final_cmds.append(commands.FullResyncCommand(resp_data.data))
             case data_types.RespRdbFile():
-                final_cmds.append(commands.RdbFileCommand(resp_data.data.data))
+                final_cmds.append(commands.RdbFileCommand(resp_data.data))
             case _:
                 logger.error(
                     f"Unsupported command (is not array) {resp_data}, {type(resp_data)}"

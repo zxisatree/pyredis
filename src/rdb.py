@@ -1,41 +1,51 @@
 from datetime import datetime, timezone
 
-import constants
+import exceptions
+from interfaces import StrVal
 from logs import logger
 
 
-class RdbFile:
+class RdbParser:
     def __init__(self, data: bytes):
         self.data = data
         self.idx = 9  # start after magic string and version number
+        # buffer is currently unused as multi DBs are not supported
         self.buffer = []
-        # rdb file only supports string types
-        self.key_values: dict[bytes, tuple[str, datetime | None]] = {}
-        err = self.read_rdb()
-        if err is not None:
-            logger.error(
-                f"Failed to read RDB file with error {err}, defaulting to empty file"
-            )
-            self.data = constants.EMPTY_RDB_FILE
+        # err = self.parse_rdb()
+        # if err is not None:
+        #     logger.error(
+        #         f"Failed to read RDB file with error {err}, defaulting to empty file"
+        #     )
+        #     self.data = constants.EMPTY_RDB_FILE
 
     def __len__(self) -> int:
         return len(self.data)
 
-    def read_rdb(self) -> str | None:
-        """Recursively parses the file by advancing self.idx and calling self.parse"""
+    def parse_rdb(self) -> dict[bytes, StrVal]:
+        """Recursively parses the file by advancing self.idx and calling self.parse. Throws RdbParseError if invalid RDB file is passed as input"""
         sanity_check = self.data[0:5]
         if sanity_check != b"REDIS":
-            return f"Invalid RDB file, magic bytes are not REDIS: {sanity_check}"
+            raise exceptions.RdbParseError(
+                f"Invalid RDB file, magic bytes are not REDIS: {sanity_check}"
+            )
         try:
             # check version number
             version = int(self.data[5:9].decode())
         except (ValueError, OverflowError):
-            return f"Invalid RDB file, got version number: {self.data[5:9]}"
+            raise exceptions.RdbParseError(
+                f"Invalid RDB file, got version number: {self.data[5:9]}"
+            )
         if not 1 <= version <= 11:
-            return f"Invalid RDB file, got unsupported version number: {version}"
+            raise exceptions.RdbParseError(
+                f"Invalid RDB file, got unsupported version number: {version}"
+            )
+        key_values = {}
         while self.idx < len(self.data):
-            self.parse()
-        return None
+            parsed = self.parse()
+            if parsed is not None:
+                k, v = parsed
+                key_values[k] = v
+        return key_values
 
     def read(self, length: int) -> bytes:
         if self.idx + length > len(self.data):
@@ -80,7 +90,7 @@ class RdbFile:
         else:
             return val
 
-    def parse(self):
+    def parse(self) -> tuple[bytes, StrVal] | None:
         """Parses the element at the current self.idx location in the file"""
         # logger.info(f"{self.data[self.idx:]=}")
         op_code = self.read(1)
@@ -100,7 +110,7 @@ class RdbFile:
                 )
                 expiry = expiry.replace(tzinfo=None)
                 key, value = self.parse_kv(self.read(1))
-                self.key_values[key] = (value.decode(), expiry)
+                return (key, (value.decode(), expiry))
             case b"\xfc":
                 # expiry time in ms
                 expiry = datetime.fromtimestamp(
@@ -108,7 +118,7 @@ class RdbFile:
                 )
                 expiry = expiry.replace(tzinfo=None)
                 key, value = self.parse_kv(self.read(1))
-                self.key_values[key] = (value.decode(), expiry)
+                return (key, (value.decode(), expiry))
             case b"\xfb":
                 # resizedb
                 db_hash_table_size = self.read_length_encoded_integer()[0]
@@ -124,8 +134,7 @@ class RdbFile:
             case _:
                 # type, key, value
                 key, value = self.parse_kv(op_code)
-                self.key_values[key] = (value.decode(), None)
-                return
+                return (key, (value.decode(), None))
 
     def parse_kv(self, val_type: bytes) -> tuple[bytes, bytes]:
         key = self.read_length_encoded_string()

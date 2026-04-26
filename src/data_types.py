@@ -284,7 +284,8 @@ class RespSimpleError(RespDataType):
 
 class RespRdbFile(RespDataType):
     def __init__(self, data: bytes):
-        self.data = rdb.RdbFile(data)
+        self.data = data
+        self.key_values = rdb.RdbParser(data).parse_rdb()
 
     def __len__(self) -> int:
         return len(self.data)
@@ -293,10 +294,10 @@ class RespRdbFile(RespDataType):
         return str(self.data)
 
     def __repr__(self) -> str:
-        return f"RdbFile({repr(self.data)})"
+        return f"RespRdbFile({repr(self.data)})"
 
     def encode(self) -> bytes:
-        return f"${len(self.data)}\r\n".encode() + self.data.data
+        return f"${len(self.data)}\r\n".encode() + self.data
 
     @staticmethod
     def decode(data: bytes, pos: int) -> tuple["RespRdbFile", int]:

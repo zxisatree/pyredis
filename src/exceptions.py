@@ -16,3 +16,7 @@ class UnsupportedOperationError(Exception):
 
 class ExecuteForAofError(Exception):
     pass
+
+
+class RdbParseError(Exception):
+    pass
