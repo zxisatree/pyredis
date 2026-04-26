@@ -1,6 +1,5 @@
-import commands
-import data_types
-from logs import logger
+from . import commands, data_types
+from .logs import logger
 
 
 def parse_cmd(cmd: bytes) -> list[commands.Command]:

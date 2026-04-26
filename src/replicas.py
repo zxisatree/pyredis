@@ -2,13 +2,8 @@ import secrets
 import socket
 from enum import Enum
 
-import codec
-import commands
-import constants
-import database
-import data_types
-from logs import logger
-import singleton_meta
+from . import codec, commands, constants, data_types, database, singleton_meta
+from .logs import logger
 
 
 class ReplicaHandler(metaclass=singleton_meta.SingletonMeta):

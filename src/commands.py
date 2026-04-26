@@ -1,21 +1,20 @@
 from datetime import datetime, timedelta
 from typing import Iterable, cast
 
-import constants
-from data_types import (
-    RespSimpleString,
-    RespBulkString,
+from . import constants, exceptions
+from .data_types import (
     RespArray,
+    RespBulkString,
     RespInteger,
     RespPlainString,
-    RespSimpleError,
     RespRdbFile,
+    RespSimpleError,
+    RespSimpleString,
 )
-from database import Database
-import exceptions
-from interfaces import Command, XactBehaviour
-from logs import logger
-from utils import encode_score, construct_conn_id, transform_to_execute_output
+from .database import Database
+from .interfaces import Command, XactBehaviour
+from .logs import logger
+from .utils import construct_conn_id, encode_score, transform_to_execute_output
 
 
 class NoOp(Command):
@@ -1103,14 +1102,16 @@ class GeoposCommand(Command):
         positions = db.geopos(self.key, self.members)
         return RespArray(
             [
-                RespArray(
-                    [
-                        RespBulkString(str(position[0]).encode()),
-                        RespBulkString(str(position[1]).encode()),
-                    ]
+                (
+                    RespArray(
+                        [
+                            RespBulkString(str(position[0]).encode()),
+                            RespBulkString(str(position[1]).encode()),
+                        ]
+                    )
+                    if position is not None
+                    else RespArray(None)
                 )
-                if position is not None
-                else RespArray(None)
                 for position in positions
             ]
         ).encode_to_list()

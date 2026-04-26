@@ -1,10 +1,12 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from enum import Enum
-import exceptions
-from typing import TYPE_CHECKING
+
 import functools
+from abc import ABC, abstractmethod
 from datetime import datetime
+from enum import Enum
+from typing import TYPE_CHECKING
+
+from . import exceptions
 
 if TYPE_CHECKING:
     import socket

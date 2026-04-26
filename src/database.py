@@ -1,20 +1,19 @@
 import bisect
-from datetime import datetime
-from enum import Enum
 import hashlib
 import socket
-from threading import Condition, Lock, Semaphore
 import time
-from typing import cast
 from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from threading import Condition, Lock, Semaphore
+from typing import cast
 
-from aof import AofHandler
-from interfaces import Command, StrVal, StreamVal, ListVal, StreamId
-import constants
-from data_types import RespArray, RespBulkString, RespDataType
-from logs import logger
-import singleton_meta
-from utils import (
+from . import constants, singleton_meta
+from .aof import AofHandler
+from .data_types import RespArray, RespBulkString, RespDataType
+from .interfaces import Command, ListVal, StreamId, StreamVal, StrVal
+from .logs import logger
+from .utils import (
     ConnId,
     ThreadsafeDefaultdict,
     decode_score,
@@ -156,7 +155,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         value = self.store[key]
         match key_type:
             case Database.ValType.STRING:
-                (str_val, expiry) = cast(StrVal, value)
+                str_val, expiry = cast(StrVal, value)
                 if expiry and self.expire_one(key):
                     return None
                 return str_val

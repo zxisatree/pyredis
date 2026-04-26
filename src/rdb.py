@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 
-import exceptions
-from interfaces import StrVal
-from logs import logger
+from . import exceptions
+from .interfaces import StrVal
+from .logs import logger
 
 
 class RdbParser:
@@ -11,12 +11,6 @@ class RdbParser:
         self.idx = 9  # start after magic string and version number
         # buffer is currently unused as multi DBs are not supported
         self.buffer = []
-        # err = self.parse_rdb()
-        # if err is not None:
-        #     logger.error(
-        #         f"Failed to read RDB file with error {err}, defaulting to empty file"
-        #     )
-        #     self.data = constants.EMPTY_RDB_FILE
 
     def __len__(self) -> int:
         return len(self.data)

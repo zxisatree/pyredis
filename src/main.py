@@ -2,26 +2,23 @@ import argparse
 import select
 import socket
 import threading
+from pathlib import Path
 from typing import Sequence
 
-from sys import path
-from pathlib import Path
-
-# if app is called from parent folder, modify path to call files in parent folder
-path.append(str(Path(__file__).parent))
-
-import aof
-import codec
-import commands
-import constants
-import database
-import data_types
-from exceptions import ArgParseError
-import interfaces
-from logs import logger
-from utils import construct_conn_id, transform_to_execute_output
-import replicas
-import rdb
+from . import (
+    aof,
+    codec,
+    commands,
+    constants,
+    data_types,
+    database,
+    interfaces,
+    rdb,
+    replicas,
+)
+from .exceptions import ArgParseError
+from .logs import logger
+from .utils import construct_conn_id, transform_to_execute_output
 
 
 def main(args: Sequence[str] | None = None):
@@ -41,7 +38,11 @@ def main(args: Sequence[str] | None = None):
         rdb_file_path = Path(rdbdir).resolve().absolute() / dbfilename
         if rdb_file_path.exists():
             with rdb_file_path.open("rb") as f:
-                rdb_key_values = rdb.RdbParser(f.read()).parse_rdb()
+                try:
+                    rdb_key_values = rdb.RdbParser(f.read()).parse_rdb()
+                except ArgParseError:
+                    logger.exception("Could not parse invalid RDB file")
+                    rdb_key_values = {}
         else:
             rdb_key_values = {}
 

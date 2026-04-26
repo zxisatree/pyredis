@@ -1,10 +1,10 @@
-from collections import defaultdict
-from math import radians, sin, cos, sqrt, asin
 import socket
+from collections import defaultdict
+from math import asin, cos, radians, sin, sqrt
 from threading import RLock
 from typing import Generic, TypeVar
 
-import constants
+from . import constants
 
 ConnId = tuple[int, str]
 

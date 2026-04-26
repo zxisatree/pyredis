@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Sequence, cast
 
-import constants
-import exceptions
-from logs import logger
-import rdb
+from . import constants, exceptions, rdb
+from .logs import logger
 
 
 class RespDataType(ABC):

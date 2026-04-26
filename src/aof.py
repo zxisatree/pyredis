@@ -1,6 +1,7 @@
 from enum import Enum
 from pathlib import Path
-from logs import logger
+
+from .logs import logger
 
 
 class AppendFsyncOption(Enum):
@@ -50,7 +51,9 @@ class AofHandler:
                         seq_num,
                         type_literal,
                         aof_type,
-                    ) = f.read().strip().split()
+                    ) = (
+                        f.read().strip().split()
+                    )
                 assert file_literal == "file"
                 assert seq_literal == "seq"
                 assert type_literal == "type"
