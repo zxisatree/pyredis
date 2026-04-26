@@ -162,11 +162,17 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         else:
             self.rdb = rdb.RdbFile(constants.EMPTY_RDB_FILE)
         self.init_from_rdb(self.rdb)
-        aof_dir_path = Path(self.dir) / self.append_dirname
-        aof_file_path = aof_dir_path / (self.append_filename + ".1.incr.aof")
-        if self.append_only and not aof_file_path.exists():
-            aof_dir_path.mkdir(parents=True, exist_ok=True)
-            aof_file_path.touch(exist_ok=True)
+        self.aof_dir_path = Path(self.dir) / self.append_dirname
+        self.aof_file_path = self.aof_dir_path / (self.append_filename + ".1.incr.aof")
+        if self.append_only and not self.aof_file_path.exists():
+            self.aof_dir_path.mkdir(parents=True, exist_ok=True)
+            self.aof_file_path.touch(exist_ok=True)
+        self.manifest_file_path = self.aof_dir_path / (
+            self.append_filename + ".manifest"
+        )
+        if self.append_only:
+            with self.manifest_file_path.open("w") as f:
+                f.write(f"file {self.aof_file_path.name} seq 1 type i")
 
         logger.info(f"db initialised with {self.store=}")
 
