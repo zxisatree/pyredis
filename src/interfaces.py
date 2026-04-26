@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import functools
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
+from functools import total_ordering
 from typing import TYPE_CHECKING
 
-from . import exceptions
+from .exceptions import ExecuteForAofError
 
 if TYPE_CHECKING:
     import socket
@@ -21,7 +21,7 @@ class XactBehaviour(Enum):
     ERROR = "error"
 
 
-@functools.total_ordering
+@total_ordering
 class StreamId:
     """ID of a stream entry"""
 
@@ -116,11 +116,11 @@ class Command(ABC):
     def execute_for_aof(self, db: database.Database) -> list[bytes]:
         """Only for commands read from AOF file which do not require the replica_handler or conn information"""
         if self.should_write_to_aof:
-            raise exceptions.ExecuteForAofError(
+            raise ExecuteForAofError(
                 f"For {self.keyword} commands, {self.should_write_to_aof=}, but execute_for_aof is not defined"
             )
         else:
-            raise exceptions.ExecuteForAofError(
+            raise ExecuteForAofError(
                 f"For {self.keyword} commands, {self.should_write_to_aof=}, execute_for_aof is not allowed"
             )
 

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from . import exceptions
+from .exceptions import RdbParseError
 from .interfaces import StrVal
 from .logs import logger
 
@@ -19,18 +19,18 @@ class RdbParser:
         """Recursively parses the file by advancing self.idx and calling self.parse. Throws RdbParseError if invalid RDB file is passed as input"""
         sanity_check = self.data[0:5]
         if sanity_check != b"REDIS":
-            raise exceptions.RdbParseError(
+            raise RdbParseError(
                 f"Invalid RDB file, magic bytes are not REDIS: {sanity_check}"
             )
         try:
             # check version number
             version = int(self.data[5:9].decode())
         except (ValueError, OverflowError):
-            raise exceptions.RdbParseError(
+            raise RdbParseError(
                 f"Invalid RDB file, got version number: {self.data[5:9]}"
             )
         if not 1 <= version <= 11:
-            raise exceptions.RdbParseError(
+            raise RdbParseError(
                 f"Invalid RDB file, got unsupported version number: {version}"
             )
         key_values = {}

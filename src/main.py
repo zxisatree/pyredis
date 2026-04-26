@@ -1,23 +1,23 @@
 import argparse
-import select
 import socket
-import threading
 from pathlib import Path
+from select import select
+from threading import Thread
 from typing import Sequence
 
 from . import (
     aof,
-    codec,
-    commands,
     constants,
     data_types,
-    database,
-    interfaces,
     rdb,
-    replicas,
 )
+from .codec import parse_cmd
+from .commands import Command
+from .database import Database
 from .exceptions import ArgParseError
+from .interfaces import XactBehaviour
 from .logs import logger
+from .replicas import ReplicaHandler
 from .utils import construct_conn_id, transform_to_execute_output
 
 
@@ -46,16 +46,16 @@ def main(args: Sequence[str] | None = None):
         else:
             rdb_key_values = {}
 
-        db = database.Database(rdbdir, dbfilename, rdb_key_values, aof_handler)
-        replica_handler = replicas.ReplicaHandler(
+        db = Database(rdbdir, dbfilename, rdb_key_values, aof_handler)
+        replica_handler = ReplicaHandler(
             False if replicaof else True, "localhost", port, replicaof, db
         )
         # attempt to connect to master
         if replicaof:
-            threading.Thread(target=replica_handler.master_recv_loop).start()
+            Thread(target=replica_handler.master_recv_loop).start()
 
         aof_cmd_data = aof_handler.read()
-        aof_cmds = codec.parse_cmd(aof_cmd_data)
+        aof_cmds = parse_cmd(aof_cmd_data)
         logger.info(f"{aof_cmd_data=}, {aof_cmds=}")
         for cmd in aof_cmds:
             cmd.execute_for_aof(db)
@@ -67,7 +67,7 @@ def main(args: Sequence[str] | None = None):
 
         logger.info(f"Started server on {port=}")
         try:
-            accept_thread = threading.Thread(
+            accept_thread = Thread(
                 target=accept_conns,
                 args=(read_socket, port, db, replica_handler, aof_handler),
             )
@@ -97,20 +97,20 @@ def main(args: Sequence[str] | None = None):
 def accept_conns(
     read_socket: socket.socket,
     port: int,
-    db: database.Database,
-    replica_handler: replicas.ReplicaHandler,
+    db: Database,
+    replica_handler: ReplicaHandler,
     aof_handler: aof.AofHandler,
 ):
     try:
         server_socket = socket.create_server(("localhost", port))
         while True:
-            ready = select.select([server_socket, read_socket], [], [])
+            ready = select([server_socket, read_socket], [], [])
             if ready[0]:
                 if read_socket in ready[0]:
                     # write_socket was closed, cleanup and shutdown this thread
                     break
                 conn, addr = server_socket.accept()
-                thread = threading.Thread(
+                thread = Thread(
                     target=handle_conn,
                     args=(conn, addr, db, replica_handler, aof_handler),
                 )
@@ -125,8 +125,8 @@ def accept_conns(
 def handle_conn(
     conn: socket.socket,
     addr,
-    db: database.Database,
-    replica_handler: replicas.ReplicaHandler,
+    db: Database,
+    replica_handler: ReplicaHandler,
     aof_handler: aof.AofHandler,
 ):
     conn_id = construct_conn_id(conn)
@@ -136,7 +136,7 @@ def handle_conn(
             if not data:
                 break
             logger.info(f"raw {data=}")
-            cmds = codec.parse_cmd(data)
+            cmds = parse_cmd(data)
             logger.info(f"{cmds=}")
             for cmd in cmds:
                 execute_cmd_for_conn(
@@ -147,9 +147,9 @@ def handle_conn(
 
 
 def execute_cmd_for_conn(
-    cmd: commands.Command,
-    db: database.Database,
-    replica_handler: replicas.ReplicaHandler,
+    cmd: Command,
+    db: Database,
+    replica_handler: ReplicaHandler,
     aof_handler: aof.AofHandler,
     conn: socket.socket,
     conn_id: tuple[int, str],
@@ -160,11 +160,11 @@ def execute_cmd_for_conn(
 
     if not is_conn_authenticated and not cmd.allowed_while_unauthenticated:
         executed = transform_to_execute_output(constants.NOAUTH_ERROR)
-    elif in_xact and cmd.xact_behaviour == interfaces.XactBehaviour.ERROR:
+    elif in_xact and cmd.xact_behaviour == XactBehaviour.ERROR:
         executed = data_types.RespSimpleError(
             f"ERR {cmd.keyword.decode().lower()} inside MULTI is not allowed".encode()
         ).encode_to_list()
-    elif in_xact and cmd.xact_behaviour == interfaces.XactBehaviour.QUEUE:
+    elif in_xact and cmd.xact_behaviour == XactBehaviour.QUEUE:
         db.queue_xact_cmd(conn_id, cmd)
         executed = transform_to_execute_output(constants.XACT_QUEUED_RESPONSE)
     elif in_subscribed_mode and not cmd.allowed_in_subscribed_mode:

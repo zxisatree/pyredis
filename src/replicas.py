@@ -1,12 +1,16 @@
-import secrets
 import socket
 from enum import Enum
+from secrets import token_hex
 
-from . import codec, commands, constants, data_types, database, singleton_meta
+from . import commands, constants
+from .codec import parse_cmd
+from .data_types import RespBulkString
+from .database import Database
 from .logs import logger
+from .singleton_meta import SingletonMeta
 
 
-class ReplicaHandler(metaclass=singleton_meta.SingletonMeta):
+class ReplicaHandler(metaclass=SingletonMeta):
     class ReplicaHandshakeState(Enum):
         """Current state of the replica master handshake"""
 
@@ -24,7 +28,7 @@ class ReplicaHandler(metaclass=singleton_meta.SingletonMeta):
         ip: str,
         port: int,
         replica_of: tuple[str, int] | None,
-        db: database.Database,
+        db: Database,
     ):
         self.is_master = is_master
         self.ack_count = 0
@@ -37,7 +41,7 @@ class ReplicaHandler(metaclass=singleton_meta.SingletonMeta):
         self.slaves: list[socket.socket] = []
         self.connected_slaves = 0
         self.role = "master" if is_master else "slave"
-        self.master_replid = secrets.token_hex(20) if is_master else "?"
+        self.master_replid = token_hex(20) if is_master else "?"
         self.master_repl_offset = 0
         self.handshake_state = ReplicaHandler.ReplicaHandshakeState.READY
         self.db = db
@@ -52,7 +56,7 @@ class ReplicaHandler(metaclass=singleton_meta.SingletonMeta):
             if not data:
                 logger.info("EOF/no data received, replica breaking")
                 break
-            cmds = codec.parse_cmd(data)
+            cmds = parse_cmd(data)
             logger.info(f"replica {cmds=}")
             self._execute_cmds(cmds)
 
@@ -96,7 +100,7 @@ class ReplicaHandler(metaclass=singleton_meta.SingletonMeta):
                 )
                 # expect any rdb file
                 data = self.master_conn.recv(constants.BUFFER_SIZE)
-                cmds = codec.parse_cmd(data)
+                cmds = parse_cmd(data)
                 logger.info(f"handshake {cmds=}")
 
                 # receive the FULLRESYNC command
@@ -110,7 +114,7 @@ class ReplicaHandler(metaclass=singleton_meta.SingletonMeta):
                     rest_cmds = cmds[2:]
                 else:
                     data = self.master_conn.recv(constants.BUFFER_SIZE)
-                    cmds = codec.parse_cmd(data)
+                    cmds = parse_cmd(data)
                     if not cmds or not isinstance(cmds[0], commands.RdbFileCommand):
                         raise Exception(f"replica expected RDB file, got {data}")
                     rdb_cmd = cmds[0]
@@ -155,10 +159,10 @@ class ReplicaHandler(metaclass=singleton_meta.SingletonMeta):
             "master_replid": self.master_replid,
             "master_repl_offset": self.master_repl_offset,
         }
-        return data_types.RespBulkString(
+        return RespBulkString(
             b"".join(
                 map(
-                    lambda item: data_types.RespBulkString(
+                    lambda item: RespBulkString(
                         f"{item[0]}:{item[1]}".encode()
                     ).encode(),
                     info.items(),

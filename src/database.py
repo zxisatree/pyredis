@@ -8,11 +8,12 @@ from enum import Enum
 from threading import Condition, Lock, Semaphore
 from typing import cast
 
-from . import constants, singleton_meta
+from . import constants
 from .aof import AofHandler
 from .data_types import RespArray, RespBulkString, RespDataType
 from .interfaces import Command, ListVal, StreamId, StreamVal, StrVal
 from .logs import logger
+from .singleton_meta import SingletonMeta
 from .utils import (
     ConnId,
     ThreadsafeDefaultdict,
@@ -80,7 +81,7 @@ class SortedSet:
         return 0
 
 
-class Database(metaclass=singleton_meta.SingletonMeta):
+class Database(metaclass=SingletonMeta):
     class ValType(Enum):
         NONE = 0
         STRING = 1

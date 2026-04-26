@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Sequence, cast
 
-from . import constants, exceptions, rdb
+from . import constants
+from .exceptions import ValidationError
 from .logs import logger
+from .rdb import RdbParser
 
 
 class RespDataType(ABC):
@@ -85,9 +87,7 @@ class RespSimpleString(RespDataType):
     @staticmethod
     def validate(that) -> "RespSimpleString":
         if not isinstance(that, RespSimpleString):
-            raise exceptions.ValidationError(
-                f"Expected RespSimpleString, got {type(that)}"
-            )
+            raise ValidationError(f"Expected RespSimpleString, got {type(that)}")
         return that
 
 
@@ -149,7 +149,7 @@ class RespArray(RespDataType):
     @staticmethod
     def validate(that) -> "RespArray":
         if not isinstance(that, RespArray):
-            raise exceptions.ValidationError(f"Expected RespArray, got {type(that)}")
+            raise ValidationError(f"Expected RespArray, got {type(that)}")
         return that
 
 
@@ -196,9 +196,7 @@ class RespBulkString(RespDataType):
     @staticmethod
     def validate(that) -> "RespBulkString":
         if not isinstance(that, RespBulkString):
-            raise exceptions.ValidationError(
-                f"Expected RespBulkString, got {type(that)}"
-            )
+            raise ValidationError(f"Expected RespBulkString, got {type(that)}")
         return that
 
     @staticmethod
@@ -239,7 +237,7 @@ class RespInteger(RespDataType):
     @staticmethod
     def validate(that) -> "RespInteger":
         if not isinstance(that, RespInteger):
-            raise exceptions.ValidationError(f"Expected RespInteger, got {type(that)}")
+            raise ValidationError(f"Expected RespInteger, got {type(that)}")
         return that
 
 
@@ -274,16 +272,14 @@ class RespSimpleError(RespDataType):
     @staticmethod
     def validate(that) -> "RespSimpleError":
         if not isinstance(that, RespSimpleError):
-            raise exceptions.ValidationError(
-                f"Expected RespSimpleError, got {type(that)}"
-            )
+            raise ValidationError(f"Expected RespSimpleError, got {type(that)}")
         return that
 
 
 class RespRdbFile(RespDataType):
     def __init__(self, data: bytes):
         self.data = data
-        self.key_values = rdb.RdbParser(data).parse_rdb()
+        self.key_values = RdbParser(data).parse_rdb()
 
     def __len__(self) -> int:
         return len(self.data)
@@ -315,7 +311,7 @@ class RespRdbFile(RespDataType):
     @staticmethod
     def validate(that) -> "RespRdbFile":
         if not isinstance(that, RespRdbFile):
-            raise exceptions.ValidationError(f"Expected RdbFile, got {type(that)}")
+            raise ValidationError(f"Expected RdbFile, got {type(that)}")
         return that
 
 
