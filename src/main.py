@@ -50,7 +50,7 @@ def main(args: Sequence[str] | None = None):
         logger.info(f"{aof_cmd_data=}, {aof_cmds=}")
         for cmd in aof_cmds:
             cmd.execute_for_aof(db)
-        logger.info("Executed commands from AOF FILE")
+        logger.info(f"Executed {len(aof_cmds)} commands from AOF FILE")
 
         # for signalling to the accepting thread to close
         # automatically cleaned up after program exits

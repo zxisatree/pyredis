@@ -29,12 +29,18 @@ class RdbFile:
         try:
             # check version number
             int.from_bytes(self.data[5:9], byteorder="little")
-        except:
+            logger.error(f"{self.data[5:9]=}")
+            logger.error(f"{int.from_bytes(self.data[5:9], byteorder="little")=}")
+            logger.error(f"{int(self.data[5:9].decode())=}")
+        except (ValueError, OverflowError):
             return f"Invalid RDB file, got version number: {self.data[5:9]}"
         while self.idx < len(self.data):
             self.parse()
+        return None
 
     def read(self, length: int) -> bytes:
+        if self.idx + length > len(self.data):
+            raise ValueError("Attempting to read more than length of RDB file")
         data = self.data[self.idx : self.idx + length]
         self.idx += length
         return data
@@ -54,7 +60,7 @@ class RdbFile:
         elif le0 == 0 and le1 == 1:
             next_byte = self.read(1)
             return (rest << 8) | int.from_bytes(next_byte), False
-        elif le0 == 1 and le0 == 0:
+        elif le0 == 1 and le1 == 0:
             return int.from_bytes(self.read(4)), False
         else:
             if rest == 0:
@@ -129,4 +135,5 @@ class RdbFile:
                 # string
                 return key, self.read_length_encoded_string()
             case _:
+                logger.warning(f"Encountered unsupported {val_type=} for {key=}")
                 return key, b""
