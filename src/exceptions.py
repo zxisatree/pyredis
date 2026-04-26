@@ -12,3 +12,7 @@ class RequestCraftError(Exception):
 
 class UnsupportedOperationError(Exception):
     pass
+
+
+class ExecuteForAofError(Exception):
+    pass

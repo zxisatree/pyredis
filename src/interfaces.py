@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from enum import Enum
+import exceptions
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -43,6 +44,17 @@ class Command(ABC):
         replica_handler: replicas.ReplicaHandler,
         conn: socket.socket,
     ) -> list[bytes]: ...
+
+    def execute_for_aof(self, db: database.Database) -> list[bytes]:
+        """Only for commands read from AOF file which do not require the replica_handler or conn information"""
+        if self.should_write_to_aof:
+            raise exceptions.ExecuteForAofError(
+                f"For {self.keyword} commands, {self.should_write_to_aof=}, but execute_for_aof is not defined"
+            )
+        else:
+            raise exceptions.ExecuteForAofError(
+                f"For {self.keyword} commands, {self.should_write_to_aof=}, execute_for_aof is not allowed"
+            )
 
     # @classmethod
     # @abstractmethod

@@ -45,6 +45,13 @@ def main(args: Sequence[str] | None = None):
         if replicaof:
             threading.Thread(target=replica_handler.master_recv_loop).start()
 
+        aof_cmd_data = aof_handler.read()
+        aof_cmds = codec.parse_cmd(aof_cmd_data)
+        logger.info(f"{aof_cmd_data=}, {aof_cmds=}")
+        for cmd in aof_cmds:
+            cmd.execute_for_aof(db)
+        logger.info("Executed commands from AOF FILE")
+
         # for signalling to the accepting thread to close
         # automatically cleaned up after program exits
         read_socket, write_socket = socket.socketpair()
@@ -123,12 +130,14 @@ def handle_conn(
             cmds = codec.parse_cmd(data)
             logger.info(f"{cmds=}")
             for cmd in cmds:
-                execute_cmd(cmd, db, replica_handler, aof_handler, conn, conn_id)
+                execute_cmd_for_conn(
+                    cmd, db, replica_handler, aof_handler, conn, conn_id
+                )
 
         logger.info(f"Connection closed: {addr=}")
 
 
-def execute_cmd(
+def execute_cmd_for_conn(
     cmd: commands.Command,
     db: database.Database,
     replica_handler: replicas.ReplicaHandler,

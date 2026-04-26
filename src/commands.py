@@ -11,6 +11,7 @@ from data_types import (
     RespSimpleError,
     RespRdbFile,
 )
+from database import Database
 import exceptions
 from interfaces import Command, XactBehaviour
 from logs import logger
@@ -99,6 +100,10 @@ class SetCommand(Command):
         self._keyword = b"SET"
 
     def execute(self, db, replica_handler, conn):
+        db.set_string_value(self.key, (self.value.decode(), self.expiry))
+        return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
+
+    def execute_for_aof(self, db: Database) -> list[bytes]:
         db.set_string_value(self.key, (self.value.decode(), self.expiry))
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
 

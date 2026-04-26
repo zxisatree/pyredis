@@ -149,7 +149,7 @@ class Database(metaclass=singleton_meta.SingletonMeta):
 
         self.dir = dir
         self.dbfilename = dbfilename
-        rdb_file_path = Path(self.dir) / self.dbfilename
+        rdb_file_path = Path(self.dir).resolve().absolute() / self.dbfilename
         if rdb_file_path.exists():
             with rdb_file_path.open("rb") as f:
                 self.rdb = rdb.RdbFile(f.read())
@@ -160,33 +160,6 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         self.aof_handler = aof_handler
 
         logger.info(f"db initialised with {self.store=}")
-
-    def get_config(self, key: bytes) -> str | None:
-        uppercase_key = key.upper()
-        if uppercase_key == b"DIR":
-            return self.dir
-        elif uppercase_key == b"DBFILENAME":
-            return self.dbfilename
-        elif uppercase_key == b"APPENDONLY":
-            return "yes" if self.aof_handler.append_only else "no"
-        elif uppercase_key == b"APPENDDIRNAME":
-            return self.aof_handler.append_dirname
-        elif uppercase_key == b"APPENDFILENAME":
-            return self.aof_handler.append_filename
-        elif uppercase_key == b"APPENDFSYNC":
-            return self.aof_handler.append_fsync.value
-        else:
-            return None
-
-    def is_conn_authenticated(self, conn_id: ConnId):
-        user, provided_password = self.authenticated_sessions[conn_id]
-        passwords = self.passwords[user]
-        return len(passwords) == 0 or provided_password in passwords
-
-    def init_from_rdb(self, rdb_file: rdb.RdbFile):
-        for key, value in rdb_file.key_values.items():
-            self.store[key] = value
-            self.key_types[key] = Database.ValType.STRING  # only support strings in RDB
 
     def __len__(self) -> int:
         return len(self.store)
@@ -224,6 +197,33 @@ class Database(metaclass=singleton_meta.SingletonMeta):
 
     def __repr__(self) -> str:
         return f"Database({repr(self.store)})"
+
+    def init_from_rdb(self, rdb_file: rdb.RdbFile):
+        for key, value in rdb_file.key_values.items():
+            self.store[key] = value
+            self.key_types[key] = Database.ValType.STRING  # only support strings in RDB
+
+    def get_config(self, key: bytes) -> str | None:
+        uppercase_key = key.upper()
+        if uppercase_key == b"DIR":
+            return self.dir
+        elif uppercase_key == b"DBFILENAME":
+            return self.dbfilename
+        elif uppercase_key == b"APPENDONLY":
+            return "yes" if self.aof_handler.append_only else "no"
+        elif uppercase_key == b"APPENDDIRNAME":
+            return self.aof_handler.append_dirname
+        elif uppercase_key == b"APPENDFILENAME":
+            return self.aof_handler.append_filename
+        elif uppercase_key == b"APPENDFSYNC":
+            return self.aof_handler.append_fsync.value
+        else:
+            return None
+
+    def is_conn_authenticated(self, conn_id: ConnId):
+        user, provided_password = self.authenticated_sessions[conn_id]
+        passwords = self.passwords[user]
+        return len(passwords) == 0 or provided_password in passwords
 
     def set_string_value(self, key: bytes, value: StrVal):
         self.key_types[key] = Database.ValType.STRING
