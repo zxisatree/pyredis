@@ -153,9 +153,9 @@ class Database(metaclass=singleton_meta.SingletonMeta):
         if rdb_file_path.exists():
             with rdb_file_path.open("rb") as f:
                 self.rdb = rdb.RdbFile(f.read())
+            self.init_from_rdb(self.rdb)
         else:
             self.rdb = rdb.RdbFile(constants.EMPTY_RDB_FILE)
-        self.init_from_rdb(self.rdb)
 
         self.aof_handler = aof_handler
 
@@ -268,10 +268,14 @@ class Database(metaclass=singleton_meta.SingletonMeta):
     def queue_xact_cmd(self, conn_id: ConnId, cmd: interfaces.Command):
         self.xacts[conn_id].append(cmd)
 
-    def pop_xact_for_exec(self, conn_id: ConnId) -> list[interfaces.Command]:
+    def pop_xact_for_exec(
+        self, conn_id: ConnId
+    ) -> tuple[bool, list[interfaces.Command]]:
+        """Returns (if any key versions have changed, list of commands)"""
+        has_any_key_version_changed = self.check_watched_keys(conn_id)
         if conn_id in self.watched_keys:
-            del self.watched_keys[conn_id]
-        return self.xacts.pop(conn_id)
+            self.clear_watched_keys(conn_id)
+        return has_any_key_version_changed, self.xacts.pop(conn_id)
 
     def watch_key(self, conn_id: ConnId, key: bytes):
         self.watched_keys[conn_id][key] = self.key_versions[key]

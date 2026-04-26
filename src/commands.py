@@ -492,8 +492,7 @@ class ExecCommand(Command):
         conn_id = construct_conn_id(conn)
         if not db.xact_exists(conn_id):
             return RespSimpleError(b"ERR EXEC without MULTI").encode_to_list()
-        has_any_version_changed = db.check_watched_keys(conn_id)
-        cmds = db.pop_xact_for_exec(conn_id)
+        has_any_version_changed, cmds = db.pop_xact_for_exec(conn_id)
         if has_any_version_changed:
             return RespArray(None).encode_to_list()
 
@@ -558,7 +557,7 @@ class RpushCommand(Command):
         return RpushCommand(
             craft_command("RPUSH", *args).encode(),
             args[0].encode(),
-            [arg.encode() for arg in args],
+            [arg.encode() for arg in args[1:]],
         )
 
 
@@ -586,7 +585,7 @@ class LpushCommand(Command):
         return LpushCommand(
             craft_command("LPUSH", *args).encode(),
             args[0].encode(),
-            [arg.encode() for arg in args],
+            [arg.encode() for arg in args[1:]],
         )
 
 
@@ -640,7 +639,7 @@ class BlpopCommand(Command):
     def craft_request(cls, *args: str):
         verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
         return BlpopCommand(
-            craft_command("LPOP", *args).encode(),
+            craft_command("BLPOP", *args).encode(),
             args[0].encode(),
             int(args[1]) if len(args) > 1 else 0,
         )
@@ -1335,7 +1334,7 @@ class WatchCommand(Command):
             raise exceptions.RequestCraftError(error_msg)
         return WatchCommand(
             craft_command("WATCH", *args).encode(),
-            [arg.encode() for arg in args[0:]],
+            [arg.encode() for arg in args],
         )
 
 

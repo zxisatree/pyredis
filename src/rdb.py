@@ -28,12 +28,11 @@ class RdbFile:
             return f"Invalid RDB file, magic bytes are not REDIS: {sanity_check}"
         try:
             # check version number
-            int.from_bytes(self.data[5:9], byteorder="little")
-            logger.error(f"{self.data[5:9]=}")
-            logger.error(f"{int.from_bytes(self.data[5:9], byteorder="little")=}")
-            logger.error(f"{int(self.data[5:9].decode())=}")
+            version = int(self.data[5:9].decode())
         except (ValueError, OverflowError):
             return f"Invalid RDB file, got version number: {self.data[5:9]}"
+        if not 1 <= version <= 11:
+            return f"Invalid RDB file, got unsupported version number: {version}"
         while self.idx < len(self.data):
             self.parse()
         return None
