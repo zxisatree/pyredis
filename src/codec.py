@@ -298,10 +298,10 @@ def parse_resp_cmd(
         password = resp_elements[2].data
         return commands.AuthCommand(raw_cmd, user, password)
     elif cmd_str == b"WATCH":
-        key = resp_elements[1].data
+        keys = [resp_element.data for resp_element in resp_elements[1:]]
         return commands.WatchCommand(
             raw_cmd,
-            key,
+            keys,
         )
     else:
         raise Exception(f"skipping unknown command {raw_cmd=}")
