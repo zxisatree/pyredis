@@ -2,7 +2,7 @@ class ValidationError(Exception):
     pass
 
 
-class ParseError(Exception):
+class ArgParseError(Exception):
     pass
 
 

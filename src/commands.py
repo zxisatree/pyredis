@@ -345,22 +345,16 @@ class ConfigGetCommand(Command):
         self._keyword = b"CONFIG"
 
     def execute(self, db, replica_handler, conn):
-        if self.key.upper() == b"DIR":
-            return RespArray(
-                [
-                    RespBulkString(self.key),
-                    RespBulkString(db.dir.encode()),
-                ]
-            ).encode_to_list()
-        elif self.key.upper() == b"DBFILENAME":
-            return RespArray(
-                [
-                    RespBulkString(self.key),
-                    RespBulkString(db.dbfilename.encode()),
-                ]
-            ).encode_to_list()
-        else:
+        config_value = db.get_config(self.key)
+        if config_value is None:
             return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
+        else:
+            return RespArray(
+                [
+                    RespBulkString(self.key),
+                    RespBulkString(config_value.encode()),
+                ]
+            ).encode_to_list()
 
     @classmethod
     def craft_request(cls, *args: str):

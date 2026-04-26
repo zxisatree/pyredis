@@ -15,6 +15,7 @@ import commands
 import constants
 import database
 import data_types
+from exceptions import ArgParseError
 import interfaces
 from logs import logger
 from utils import construct_conn_id, transform_to_execute_output
@@ -22,10 +23,19 @@ import replicas
 
 
 def main(args: Sequence[str] | None = None):
-    port, replicaof, rdbdir, dbfilename = validate_parse_args(
-        setup_argparser().parse_args(args)
+    (
+        port,
+        replicaof,
+        rdbdir,
+        dbfilename,
+        appendonly,
+        appenddirname,
+        appendfilename,
+        appendfsync,
+    ) = validate_parse_args(setup_argparser().parse_args(args))
+    db = database.Database(
+        rdbdir, dbfilename, appendonly, appenddirname, appendfilename, appendfsync
     )
-    db = database.Database(rdbdir, dbfilename)
     replica_handler = replicas.ReplicaHandler(
         False if replicaof else True, "localhost", port, replicaof, db
     )
@@ -144,14 +154,24 @@ def execute_cmd(
     for resp in executed:
         logger.info(f"responding with {resp}")
         conn.sendall(resp)
+        # better error catching for prod
+        # if isinstance(resp, data_types.RespDataType):
+        #     logger.warning(
+        #         f"{cmd.keyword} returned a RespDataType. Automatically encoding to bytes..."
+        #     )
+        #     resp_bytes = b"".join(resp.encode_to_list())
+        # else:
+        #     resp_bytes = resp
+        # logger.info(f"responding with {resp_bytes}")
+        # conn.sendall(resp_bytes)
 
 
 def validate_parse_args(
     args: argparse.Namespace,
-) -> tuple[int, tuple[str, int] | None, str, str]:
-    """Throws ValueError if validation fails"""
+) -> tuple[int, tuple[str, int] | None, str, str, bool, str, str, str]:
+    """Throws ArgParseError if validation fails"""
     if args.port < 0 or args.port > 65535:
-        raise ValueError(
+        raise ArgParseError(
             f"Invalid port number {args.port}, should be between 0 and 65535"
         )
     replicaof = None
@@ -160,36 +180,71 @@ def validate_parse_args(
         try:
             replicaof_int = int(replica_port)
         except ValueError:
-            raise ValueError("replicaof port is not an integer")
+            raise ArgParseError("replicaof port is not an integer")
         replicaof = (replica_host, replicaof_int)
-    return args.port, replicaof, args.dir, args.dbfilename
+    if args.appendonly == "no":
+        appendonly = False
+    elif args.appendonly == "yes":
+        appendonly = True
+    else:
+        raise ArgParseError(
+            f"Invalid appendonly option {args.appendonly}, should be one of ('no', 'yes')"
+        )
+    return (
+        args.port,
+        replicaof,
+        args.dir,
+        args.dbfilename,
+        appendonly,
+        args.appenddirname,
+        args.appendfilename,
+        args.appendfsync,
+    )
 
 
 def setup_argparser() -> argparse.ArgumentParser:
     argparser = argparse.ArgumentParser(
-        prog="pykvstore", description="Key value database"
+        prog="pykvstore",
+        description="Key value database",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    argparser.add_argument(
-        "--port", type=int, default=6379, help="Port to listen on (default: 6379)"
-    )
+    argparser.add_argument("--port", type=int, default=6379, help="Port to listen on")
     argparser.add_argument(
         "--replicaof",
-        type=str,
         # nargs=2, # tests recently changed to a single string e.g. "localhost 6380"
         default=None,
-        help="Master IP and port to replicate from (default: None)",
+        help="Master IP and port to replicate from",
     )
+    # default value was ./rdb before implementing AOF
     argparser.add_argument(
         "--dir",
-        type=str,
-        default="./rdb",
-        help="Directory where RDB files are stored (default: ./rdb)",
+        default="/app",
+        help="Directory where files are stored",
     )
     argparser.add_argument(
         "--dbfilename",
-        type=str,
         default="dump.rdb",
-        help="The name of the RDB file (default: dump.rdb)",
+        help="The name of the RDB file",
+    )
+    argparser.add_argument(
+        "--appendonly",
+        default="no",
+        help="Enable AOF persistence",
+    )
+    argparser.add_argument(
+        "--appenddirname",
+        default="appendonlydir",
+        help="Subdirectory where AOF files are stored",
+    )
+    argparser.add_argument(
+        "--appendfilename",
+        default="appendonly.aof",
+        help="Name of AOF file",
+    )
+    argparser.add_argument(
+        "--appendfsync",
+        default="everysec",
+        help="Frequency of fsync",
     )
     return argparser
 

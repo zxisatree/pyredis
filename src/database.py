@@ -3,8 +3,8 @@ from datetime import datetime
 from enum import Enum
 import functools
 import hashlib
-import os
 import socket
+from pathlib import Path
 from threading import Condition, Lock, Semaphore
 import time
 from typing import cast
@@ -107,7 +107,15 @@ class Database(metaclass=singleton_meta.SingletonMeta):
                     return "set"
             return "none"
 
-    def __init__(self, dir: str, dbfilename: str):
+    def __init__(
+        self,
+        dir: str,
+        dbfilename: str,
+        append_only: bool,
+        append_dirname: str,
+        append_filename: str,
+        append_fsync: str,
+    ):
         self.store: dict[
             bytes, Database.StrVal | Database.StreamVal | Database.ListVal | SortedSet
         ] = {}
@@ -143,14 +151,41 @@ class Database(metaclass=singleton_meta.SingletonMeta):
 
         self.dir = dir
         self.dbfilename = dbfilename
-        file_path = os.path.join(self.dir, self.dbfilename)
-        if os.path.exists(file_path):
-            with open(file_path, "rb") as f:
+        self.append_only = append_only
+        self.append_dirname = append_dirname
+        self.append_filename = append_filename
+        self.append_fsync = append_fsync
+        rdb_file_path = Path(self.dir) / self.dbfilename
+        if rdb_file_path.exists():
+            with rdb_file_path.open("rb") as f:
                 self.rdb = rdb.RdbFile(f.read())
         else:
             self.rdb = rdb.RdbFile(constants.EMPTY_RDB_FILE)
         self.init_from_rdb(self.rdb)
+        aof_dir_path = Path(self.dir) / self.append_dirname
+        aof_file_path = aof_dir_path / (self.append_filename + ".1.incr.aof")
+        if self.append_only and not aof_file_path.exists():
+            aof_dir_path.mkdir(parents=True, exist_ok=True)
+            aof_file_path.touch(exist_ok=True)
+
         logger.info(f"db initialised with {self.store=}")
+
+    def get_config(self, key: bytes) -> str | None:
+        uppercase_key = key.upper()
+        if uppercase_key == b"DIR":
+            return self.dir
+        elif uppercase_key == b"DBFILENAME":
+            return self.dbfilename
+        elif uppercase_key == b"APPENDONLY":
+            return "yes" if self.append_only else "no"
+        elif uppercase_key == b"APPENDDIRNAME":
+            return self.append_dirname
+        elif uppercase_key == b"APPENDFILENAME":
+            return self.append_filename
+        elif uppercase_key == b"APPENDFSYNC":
+            return self.append_fsync
+        else:
+            return None
 
     def is_conn_authenticated(self, conn_id: ConnId):
         user, provided_password = self.authenticated_sessions[conn_id]
