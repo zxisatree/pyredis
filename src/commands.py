@@ -248,10 +248,7 @@ class ReplConfAckCommand(Command):
         self._keyword = b"REPLCONF"
 
     def execute(self, db, replica_handler, conn):
-        logger.info(
-            f"incrementing {replica_handler.ack_count=} to {replica_handler.ack_count + 1}"
-        )
-        replica_handler.ack_count += 1
+        replica_handler.incr_ack_count()
         return []
 
     @classmethod
@@ -403,31 +400,11 @@ class WaitCommand(Command):
         self._keyword = b"WAIT"
 
     def execute(self, db, replica_handler, conn):
-        now = datetime.now()
-        end = now + self.timeout
-        replica_handler.ack_count = 0
-        replica_handler.propogate(
-            RespArray(
-                [
-                    RespBulkString(b"REPLCONF"),
-                    RespBulkString(b"GETACK"),
-                    RespBulkString(b"*"),
-                ]
-            ).encode()
-        )
-        logger.info("finished sending to all slaves")
-        while replica_handler.ack_count < self.replica_count and datetime.now() < end:
-            pass
-
-        logger.info(
-            f"{replica_handler.ack_count=}, {datetime.now() - end=} (should be positive)"
-        )
-        # hardcode to len(slaves) if no acks
-        return RespInteger(
-            replica_handler.ack_count
-            if replica_handler.ack_count > 0
-            else len(replica_handler.slaves)
-        ).encode_to_list()
+        # if no writes since server start, return number of connected replicas
+        if replica_handler.master_repl_offset == 0:
+            return RespInteger(len(replica_handler.slaves)).encode_to_list()
+        ack_count = replica_handler.wait(self.replica_count, self.timeout)
+        return RespInteger(ack_count).encode_to_list()
 
     @classmethod
     def craft_request(cls, *args: str):
@@ -589,7 +566,7 @@ class LpushCommand(Command):
 
 
 class LpopCommand(Command):
-    expected_arg_count = [1, 2]
+    expected_arg_count = [2]
 
     def __init__(self, raw_cmd: bytes, key: bytes, count: int):
         self._raw_cmd = raw_cmd

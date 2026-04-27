@@ -1,10 +1,11 @@
+from datetime import datetime, timedelta
 import socket
 from enum import Enum
 from secrets import token_hex
 
 from . import commands, constants
 from .codec import parse_cmd
-from .data_types import RespBulkString
+from .data_types import RespArray, RespBulkString
 from .database import Database
 from .logs import logger
 from .singleton_meta import SingletonMeta
@@ -45,6 +46,30 @@ class ReplicaHandler(metaclass=SingletonMeta):
         self.master_repl_offset = 0
         self.handshake_state = ReplicaHandler.ReplicaHandshakeState.READY
         self.db = db
+
+    def incr_ack_count(self):
+        logger.info(f"incrementing {self.ack_count=} to {self.ack_count + 1}")
+        self.ack_count += 1
+
+    def wait(self, replica_count: int, timeout: timedelta):
+        now = datetime.now()
+        end = now + timeout
+        self.ack_count = 0
+        self.propogate(
+            RespArray(
+                [
+                    RespBulkString(b"REPLCONF"),
+                    RespBulkString(b"GETACK"),
+                    RespBulkString(b"*"),
+                ]
+            ).encode()
+        )
+        logger.info("finished sending to all slaves")
+        while self.ack_count < replica_count and datetime.now() < end:
+            pass
+
+        logger.info(f"{self.ack_count=}, {datetime.now() - end=} (should be positive)")
+        return self.ack_count
 
     def master_recv_loop(self):
         while self.handshake_state != ReplicaHandler.ReplicaHandshakeState.DONE:
@@ -150,6 +175,7 @@ class ReplicaHandler(metaclass=SingletonMeta):
     def propogate(self, raw_cmd: bytes):
         for slave in self.slaves:
             slave.sendall(raw_cmd)
+        self.master_repl_offset += len(raw_cmd)
 
     def get_info(self) -> list[bytes]:
         """Encodes each kv as a RespBulkString"""

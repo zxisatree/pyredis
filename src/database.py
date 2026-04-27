@@ -346,7 +346,7 @@ class Database(metaclass=SingletonMeta):
         return cast(ListVal, self.store[key])
 
     def key_exists(self, key: bytes) -> bool:
-        return key in self.store or key in self.store
+        return key in self.store
 
     def validate_stream_id(self, key: bytes, id: str) -> bytes | None:
         """Returns the error when validating the stream ID, if it exists"""
@@ -426,7 +426,7 @@ class Database(metaclass=SingletonMeta):
         else:
             end_stream_id = StreamId(end)
 
-        lo = bisect.bisect_right(value, start_stream_id, key=lambda x: x[0])
+        lo = bisect.bisect_left(value, start_stream_id, key=lambda x: x[0])
         if lo >= len(value):
             return transform_to_execute_output(constants.EMPTY_RESP_ARRAY)
         hi = bisect.bisect_right(value, end_stream_id, key=lambda x: x[0])
@@ -434,7 +434,7 @@ class Database(metaclass=SingletonMeta):
             hi = len(value)
 
         res = []
-        for i in range(lo - 1 if lo != 0 else 0, hi):
+        for i in range(lo, hi):
             flattened_kvs = [
                 RespBulkString(item.encode())
                 for items in value[i][1].items()
@@ -453,9 +453,9 @@ class Database(metaclass=SingletonMeta):
     def xread(
         self, stream_keys: list[bytes], ids: list[str], timeout: int | None
     ) -> list[bytes]:
+        original_lens = [len(self.store[stream_key]) for stream_key in stream_keys]
+        logger.info(f"{original_lens=}")
         if timeout is not None:
-            original_lens = [len(self.store[stream_key]) for stream_key in stream_keys]
-            logger.info(f"{original_lens=}")
             if timeout != 0:
                 time.sleep(timeout / 1e3)
             else:
