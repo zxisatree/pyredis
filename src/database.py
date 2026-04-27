@@ -367,10 +367,10 @@ class Database(metaclass=SingletonMeta):
             return constants.STREAM_ID_NOT_GREATER_ERROR.encode()
         _, seq_no = splitted
         seq_no_is_star = seq_no == "*"
-        stream_id = StreamId(id)
         if seq_no_is_star:
             return None
-        is_0_0 = stream_id.milliseconds_time == "0" and stream_id.seq_no == "0"
+        stream_id = StreamId(id)
+        is_0_0 = stream_id.milliseconds_time == 0 and stream_id.seq_no == 0
         if is_0_0:
             return constants.STREAM_ID_TOO_SMALL_ERROR.encode()
 

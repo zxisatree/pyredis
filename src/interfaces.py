@@ -27,8 +27,8 @@ class StreamId:
 
     def __init__(self, id_str: str):
         milliseconds_time, seq_no = id_str.split("-")
-        self.milliseconds_time = milliseconds_time
-        self.seq_no = seq_no
+        self.milliseconds_time = int(milliseconds_time)
+        self.seq_no = int(seq_no)
 
     def __repr__(self) -> str:
         return f"StreamId({self.milliseconds_time}-{self.seq_no})"
@@ -49,11 +49,16 @@ class StreamId:
             return self.milliseconds_time < other.milliseconds_time
         return self.seq_no < other.seq_no
 
+    # def __lt__(self, other: "StreamId"):
+    #     if self.milliseconds_time != other.milliseconds_time:
+    #         return int(self.milliseconds_time) < int(other.milliseconds_time)
+    #     return int(self.seq_no) < int(other.seq_no)
+
     @staticmethod
     def generate_stream_id(id: str, last_id: "StreamId | None") -> "StreamId":
         if id == "*":
             # milliseconds_time should be current time in milliseconds
-            milliseconds_time = str(int(datetime.now().timestamp() * 1000))
+            milliseconds_time = int(datetime.now().timestamp() * 1000)
             if not last_id:
                 return StreamId(f"{milliseconds_time}-0")
             if last_id.milliseconds_time == milliseconds_time:
@@ -63,17 +68,20 @@ class StreamId:
         splitted = id.split("-")
         if len(splitted) != 2:
             raise Exception(f"Invalid stream id {id}")
-        milliseconds_time, seq_no = splitted
+        milliseconds_time = int(splitted[0])
+        seq_no_raw = splitted[1]
+        # placeholder, is overwritten if seq_no_raw is indeed "*"
+        seq_no = int(splitted[1]) if seq_no_raw != "*" else 0
         if not last_id:
-            if seq_no == "*":
-                seq_no = "1" if milliseconds_time == "0" else "0"
+            if seq_no_raw == "*":
+                seq_no = 1 if milliseconds_time == 0 else 0
             return StreamId(f"{milliseconds_time}-{seq_no}")
 
-        if seq_no == "*":
+        if seq_no_raw == "*":
             if milliseconds_time == last_id.milliseconds_time:
-                seq_no = str(int(last_id.seq_no) + 1)
+                seq_no = last_id.seq_no + 1
             else:
-                seq_no = "1" if milliseconds_time == "0" else "0"
+                seq_no = 1 if milliseconds_time == 0 else 0
         return StreamId(f"{milliseconds_time}-{seq_no}")
 
     def next_seq_id(self) -> "StreamId":
