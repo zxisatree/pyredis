@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from functools import total_ordering
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from .exceptions import ExecuteForAofError
 
@@ -94,6 +94,7 @@ ListVal = list[bytes]
 
 
 class Command(ABC):
+    keyword: ClassVar[str]
     allowed_in_subscribed_mode = False
     xact_behaviour = XactBehaviour.QUEUE
     allowed_while_unauthenticated = False
@@ -102,17 +103,16 @@ class Command(ABC):
 
     def __init__(self):
         self._raw_cmd = b""
-        # self._keyword = b""
 
     # replicas require this, but there's no good way to enforce properties on subclasses. It's either this with bad developer experience (need to write self._raw_cmd instead of self.raw_cmd in __init__) or runtime checks (slow, use reflection)
     @property
     def raw_cmd(self) -> bytes:
         return self._raw_cmd
 
-    @property
-    def keyword(self) -> bytes:
-        return self.__class__.__name__.replace("Command", "").lower().encode()
-        # return self._keyword
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if "keyword" not in cls.__dict__:
+            cls.keyword = cls.__name__.replace("Command", "").lower()
 
     @abstractmethod
     def execute(

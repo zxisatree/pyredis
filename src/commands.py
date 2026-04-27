@@ -22,7 +22,6 @@ class NoOp(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"NOOP"
 
     def execute(self, db, replica_handler, conn):
         return transform_to_execute_output(constants.NO_OP_ERROR)
@@ -39,7 +38,6 @@ class PingCommand(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"PING"
 
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
@@ -62,7 +60,6 @@ class EchoCommand(Command):
     def __init__(self, raw_cmd: bytes, bulk_str: RespBulkString):
         self._raw_cmd = raw_cmd
         self.msg = bulk_str.data
-        self._keyword = b"ECHO"
 
     def execute(self, db, replica_handler, conn):
         return RespBulkString(self.msg).encode_to_list()
@@ -96,7 +93,6 @@ class SetCommand(Command):
             if expiry
             else None
         )
-        self._keyword = b"SET"
 
     def execute(self, db, replica_handler, conn):
         db.set_string_value(self.key, (self.value.decode(), self.expiry))
@@ -134,7 +130,6 @@ class IncrCommand(Command):
     ):
         self._raw_cmd = raw_cmd
         self.key = key
-        self._keyword = b"INCR"
 
     def execute(self, db, replica_handler, conn):
         value_type = db.get_type(self.key)
@@ -172,7 +167,6 @@ class GetCommand(Command):
     def __init__(self, raw_cmd: bytes, key: bytes):
         self._raw_cmd = raw_cmd
         self.key = key
-        self._keyword = b"GET"
 
     def execute(self, db, replica_handler, conn):
         if self.key in db:
@@ -197,7 +191,6 @@ class CommandCommand(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"COMMAND"
 
     def execute(self, db, replica_handler, conn):
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
@@ -213,7 +206,6 @@ class InfoCommand(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"INFO"
 
     def execute(self, db, replica_handler, conn):
         return replica_handler.get_info()
@@ -229,7 +221,6 @@ class ReplConfCommand(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"REPLCONF"
 
     def execute(self, db, replica_handler, conn):
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
@@ -242,10 +233,10 @@ class ReplConfCommand(Command):
 
 class ReplConfAckCommand(Command):
     expected_arg_count = [1]
+    keyword = "REPLCONF"
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"REPLCONF"
 
     def execute(self, db, replica_handler, conn):
         replica_handler.incr_ack_count()
@@ -259,11 +250,11 @@ class ReplConfAckCommand(Command):
 
 class ReplConfGetAckCommand(Command):
     expected_arg_count = [0]
+    keyword = "REPLCONF"
     should_propogate_to_replicas = True
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"REPLCONF"
 
     def execute(self, db, replica_handler, conn):
         return RespArray(
@@ -285,7 +276,6 @@ class PsyncCommand(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"PSYNC"
 
     def execute(self, db, replica_handler, conn):
         replica_handler.add_slave(conn)
@@ -308,7 +298,6 @@ class FullResyncCommand(Command):
     def __init__(self, data: bytes) -> None:
         self.data = data
         self._raw_cmd = data
-        self._keyword = b"FULLRESYNC"
 
     def execute(self, db, replica_handler, conn):
         return []
@@ -321,11 +310,11 @@ class FullResyncCommand(Command):
 
 class RdbFileCommand(Command):
     expected_arg_count = [0]
+    keyword = ""
 
     def __init__(self, data: bytes) -> None:
         self.rdbfile = RespRdbFile(data)
         self._raw_cmd = data
-        self._keyword = b""
 
     # slave received a RDB file
     def execute(self, db, replica_handler, conn):
@@ -340,11 +329,11 @@ class RdbFileCommand(Command):
 
 class ConfigGetCommand(Command):
     expected_arg_count = [1]
+    keyword = "CONFIG"
 
     def __init__(self, raw_cmd: bytes, key: bytes):
         self._raw_cmd = raw_cmd
         self.key = key
-        self._keyword = b"CONFIG"
 
     def execute(self, db, replica_handler, conn):
         config_value = db.get_config(self.key)
@@ -372,7 +361,6 @@ class KeysCommand(Command):
     def __init__(self, raw_cmd: bytes, pattern: bytes):
         self._raw_cmd = raw_cmd
         self.pattern = pattern
-        self._keyword = b"KEYS"
 
     def execute(self, db, replica_handler, conn):
         return RespArray(
@@ -397,7 +385,6 @@ class WaitCommand(Command):
         self._raw_cmd = raw_cmd
         self.replica_count = replica_count
         self.timeout = timedelta(milliseconds=timeout)
-        self._keyword = b"WAIT"
 
     def execute(self, db, replica_handler, conn):
         # if no writes since server start, return number of connected replicas
@@ -420,7 +407,6 @@ class TypeCommand(Command):
     def __init__(self, raw_cmd: bytes, key: bytes):
         self._raw_cmd = raw_cmd
         self.key = key
-        self._keyword = b"TYPE"
 
     def execute(self, db, replica_handler, conn):
         if self.key in db:
@@ -443,7 +429,6 @@ class MultiCommand(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"MULTI"
 
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
@@ -462,7 +447,6 @@ class ExecCommand(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"EXEC"
 
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
@@ -494,7 +478,6 @@ class DiscardCommand(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"DISCARD"
 
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
@@ -521,7 +504,6 @@ class RpushCommand(Command):
         self._raw_cmd = raw_cmd
         self.key = key
         self.values = values
-        self._keyword = b"RPUSH"
 
     def execute(self, db, replica_handler, conn):
         length = db.rpush(self.key, self.values)
@@ -549,7 +531,6 @@ class LpushCommand(Command):
         self._raw_cmd = raw_cmd
         self.key = key
         self.values = values
-        self._keyword = b"LPUSH"
 
     def execute(self, db, replica_handler, conn):
         length = db.lpush(self.key, self.values[::-1])
@@ -572,7 +553,6 @@ class LpopCommand(Command):
         self._raw_cmd = raw_cmd
         self.key = key
         self.count = count
-        self._keyword = b"LPOP"
 
     def execute(self, db, replica_handler, conn):
         if self.count == 1:
@@ -599,7 +579,6 @@ class BlpopCommand(Command):
         self._raw_cmd = raw_cmd
         self.key = key
         self.timeout = timeout
-        self._keyword = b"BLPOP"
 
     def execute(self, db, replica_handler, conn):
         value = db.blpop_timeout(self.key, None if self.timeout == 0 else self.timeout)
@@ -631,7 +610,6 @@ class LlenCommand(Command):
     ):
         self._raw_cmd = raw_cmd
         self.key = key
-        self._keyword = b"LLEN"
 
     def execute(self, db, replica_handler, conn):
         if not db.key_exists(self.key):
@@ -657,7 +635,6 @@ class LrangeCommand(Command):
         self.key = key
         self.start = start
         self.stop = stop
-        self._keyword = b"LRANGE"
 
     def execute(self, db, replica_handler, conn):
         if not db.key_exists(self.key) or (self.stop >= 0 and self.start > self.stop):
@@ -690,7 +667,6 @@ class XaddCommand(Command):
         self._raw_cmd = raw_cmd
         self.stream_key = stream_key
         self.data = data
-        self._keyword = b"XADD"
 
     def execute(
         self,
@@ -737,7 +713,6 @@ class XrangeCommand(Command):
         self.key = key
         self.start = start
         self.end = end
-        self._keyword = b"XRANGE"
 
     def execute(self, db, replica_handler, conn):
         return db.xrange(self.key, self.start, self.end)
@@ -764,7 +739,6 @@ class XreadCommand(Command):
         self.stream_keys = stream_keys
         self.ids = ids
         self.timeout = timeout
-        self._keyword = b"XREAD"
 
     def execute(self, db, replica_handler, conn):
         return db.xread(self.stream_keys, self.ids, self.timeout)
@@ -795,7 +769,6 @@ class SubscribeCommand(Command):
     def __init__(self, raw_cmd: bytes, channel_name: bytes):
         self._raw_cmd = raw_cmd
         self.channel_name = channel_name
-        self._keyword = b"SUBSCRIBE"
 
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
@@ -823,7 +796,6 @@ class UnsubscribeCommand(Command):
     def __init__(self, raw_cmd: bytes, channel_name: bytes):
         self._raw_cmd = raw_cmd
         self.channel_name = channel_name
-        self._keyword = b"UNSUBSCRIBE"
 
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
@@ -851,7 +823,6 @@ class PublishCommand(Command):
         self._raw_cmd = raw_cmd
         self.channel_name = channel_name
         self.msg = msg
-        self._keyword = b"PUBLISH"
 
     def execute(self, db, replica_handler, conn):
         publish_msg = RespArray(
@@ -878,7 +849,6 @@ class ZaddCommand(Command):
 
     def __init__(self, raw_cmd: bytes, key: bytes, score: float, name: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"ZADD"
         self.key = key
         self.score = score
         self.name = name
@@ -904,7 +874,6 @@ class ZrankCommand(Command):
 
     def __init__(self, raw_cmd: bytes, key: bytes, name: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"ZRANK"
         self.key = key
         self.name = name
 
@@ -930,7 +899,6 @@ class ZrangeCommand(Command):
 
     def __init__(self, raw_cmd: bytes, key: bytes, start: int, end: int):
         self._raw_cmd = raw_cmd
-        self._keyword = b"ZRANGE"
         self.key = key
         self.start = start
         self.end = end
@@ -960,7 +928,6 @@ class ZcardCommand(Command):
 
     def __init__(self, raw_cmd: bytes, key: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"ZCARD"
         self.key = key
 
     def execute(self, db, replica_handler, conn):
@@ -981,7 +948,6 @@ class ZscoreCommand(Command):
 
     def __init__(self, raw_cmd: bytes, key: bytes, name: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"ZSCORE"
         self.key = key
         self.name = name
 
@@ -1007,7 +973,6 @@ class ZremCommand(Command):
 
     def __init__(self, raw_cmd: bytes, key: bytes, name: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"ZREM"
         self.key = key
         self.name = name
 
@@ -1037,7 +1002,6 @@ class GeoaddCommand(Command):
         member: bytes,
     ):
         self._raw_cmd = raw_cmd
-        self._keyword = b"GEOADD"
         self.key = key
         self.longitude = longitude
         self.latitude = latitude
@@ -1071,7 +1035,6 @@ class GeoposCommand(Command):
         members: list[bytes],
     ):
         self._raw_cmd = raw_cmd
-        self._keyword = b"GEOPOS"
         self.key = key
         self.members = members
 
@@ -1111,7 +1074,6 @@ class GeodistCommand(Command):
 
     def __init__(self, raw_cmd: bytes, key: bytes, place1: bytes, place2: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"GEODIST"
         self.key = key
         self.place1 = place1
         self.place2 = place2
@@ -1150,7 +1112,6 @@ class GeosearchCommand(Command):
         if mode != b"FROMLONLAT" or byradius != b"BYRADIUS" or unit != b"m":
             raise NotImplementedError()
         self._raw_cmd = raw_cmd
-        self._keyword = b"GEOSEARCH"
         self.key = key
         self.mode = mode
         self.longitude = longitude
@@ -1185,10 +1146,10 @@ class GeosearchCommand(Command):
 
 class AclWhoamiCommand(Command):
     expected_arg_count = [0]
+    keyword = "ACL"
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"ACL"
 
     def execute(self, db, replica_handler, conn):
         return RespBulkString(b"default").encode_to_list()
@@ -1203,11 +1164,11 @@ class AclWhoamiCommand(Command):
 
 class AclGetuserCommand(Command):
     expected_arg_count = [1]
+    keyword = "ACL"
 
     def __init__(self, raw_cmd: bytes, user: bytes):
         self._raw_cmd = raw_cmd
         self.user = user
-        self._keyword = b"ACL"
 
     def execute(self, db, replica_handler, conn):
         passwords = db.get_passwords(self.user)
@@ -1234,12 +1195,12 @@ class AclGetuserCommand(Command):
 
 class AclSetuserCommand(Command):
     expected_arg_count = [2]
+    keyword = "ACL"
 
     def __init__(self, raw_cmd: bytes, user: bytes, property: bytes):
         self._raw_cmd = raw_cmd
         self.user = user
         self.property = property
-        self._keyword = b"ACL"
 
     def execute(self, db, replica_handler, conn):
         if self.property.startswith(b">"):
@@ -1269,7 +1230,6 @@ class AuthCommand(Command):
         self._raw_cmd = raw_cmd
         self.user = user
         self.password = password
-        self._keyword = b"AUTH"
 
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
@@ -1297,7 +1257,6 @@ class WatchCommand(Command):
     def __init__(self, raw_cmd: bytes, keys: list[bytes]):
         self._raw_cmd = raw_cmd
         self.keys = keys
-        self._keyword = b"WATCH"
 
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
@@ -1322,7 +1281,6 @@ class UnwatchCommand(Command):
 
     def __init__(self, raw_cmd: bytes):
         self._raw_cmd = raw_cmd
-        self._keyword = b"UNWATCH"
 
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)

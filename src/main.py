@@ -162,14 +162,14 @@ def execute_cmd_for_conn(
         executed = transform_to_execute_output(constants.NOAUTH_ERROR)
     elif in_xact and cmd.xact_behaviour == XactBehaviour.ERROR:
         executed = data_types.RespSimpleError(
-            f"ERR {cmd.keyword.decode().lower()} inside MULTI is not allowed".encode()
+            f"ERR {cmd.keyword} inside MULTI is not allowed".encode()
         ).encode_to_list()
     elif in_xact and cmd.xact_behaviour == XactBehaviour.QUEUE:
         db.queue_xact_cmd(conn_id, cmd)
         executed = transform_to_execute_output(constants.XACT_QUEUED_RESPONSE)
     elif in_subscribed_mode and not cmd.allowed_in_subscribed_mode:
         executed = data_types.RespSimpleError(
-            f"ERR Can't execute '{cmd.keyword.decode().lower()}': only SUBSCRIBE / UNSUBSCRIBE / PING / QUIT / RESET are allowed in subscribed mode".encode()
+            f"ERR Can't execute '{cmd.keyword}': only SUBSCRIBE / UNSUBSCRIBE / PING / QUIT / RESET are allowed in subscribed mode".encode()
         ).encode_to_list()
     else:
         if cmd.should_propogate_to_replicas:
