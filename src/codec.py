@@ -22,7 +22,7 @@ def parse_cmd(cmd: bytes) -> list[commands.Command]:
                 logger.error(
                     f"Unsupported command (is not array) {resp_data}, {type(resp_data)}"
                 )
-                final_cmds.append(commands.NoOp(cmd[orig:pos]))
+                final_cmds.append(commands.NoOpCommand(cmd[orig:pos]))
     return final_cmds
 
 
@@ -36,7 +36,7 @@ def parse_resp_cmd(
             logger.error(
                 f"Unsupported command {cmd[start:end]}, {element} is not a bulk string"
             )
-            return commands.NoOp(cmd[start:end])
+            return commands.NoOpCommand(cmd[start:end])
         resp_elements.append(result[0])
 
     cmd_str = resp_elements[0].data.upper()

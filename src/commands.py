@@ -17,7 +17,7 @@ from .logs import logger
 from .utils import construct_conn_id, encode_score, transform_to_execute_output
 
 
-class NoOp(Command):
+class NoOpCommand(Command):
     expected_arg_count = [0]
 
     def __init__(self, raw_cmd: bytes):
@@ -25,11 +25,6 @@ class NoOp(Command):
 
     def execute(self, db, replica_handler, conn):
         return transform_to_execute_output(constants.NO_OP_ERROR)
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return NoOp(b"")
 
 
 class PingCommand(Command):
@@ -48,11 +43,6 @@ class PingCommand(Command):
         else:
             return RespSimpleString(b"PONG").encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return PingCommand(craft_command("PING").encode())
-
 
 class EchoCommand(Command):
     expected_arg_count = [1]
@@ -63,14 +53,6 @@ class EchoCommand(Command):
 
     def execute(self, db, replica_handler, conn):
         return RespBulkString(self.msg).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return EchoCommand(
-            craft_command("ECHO", *args).encode(),
-            RespBulkString(args[0].encode()),
-        )
 
 
 class SetCommand(Command):
@@ -109,16 +91,6 @@ class SetCommand(Command):
                 f"Unsupported SET command (fourth element is not 'PX') {px_cmd.data}"
             )
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return SetCommand(
-            craft_command("SET", *args).encode(),
-            RespBulkString(args[0].encode()),
-            RespBulkString(args[1].encode()),
-            RespBulkString(args[2].encode()) if len(args) > 2 else None,
-        )
-
 
 class IncrCommand(Command):
     expected_arg_count = [1]
@@ -155,11 +127,6 @@ class IncrCommand(Command):
         db.set_string_value(self.key, (new_value, expiry))
         return RespInteger(int(new_value)).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return IncrCommand(craft_command("INCR", *args).encode(), args[0].encode())
-
 
 class GetCommand(Command):
     expected_arg_count = [1]
@@ -177,14 +144,6 @@ class GetCommand(Command):
                 return RespBulkString(str(value).encode()).encode_to_list()
         return transform_to_execute_output(constants.NULL_BULK_RESP_STRING)
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return GetCommand(
-            craft_command("GET", *args).encode(),
-            args[0].encode(),
-        )
-
 
 class CommandCommand(Command):
     expected_arg_count = [0]
@@ -194,11 +153,6 @@ class CommandCommand(Command):
 
     def execute(self, db, replica_handler, conn):
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return CommandCommand(craft_command("COMMAND").encode())
 
 
 class InfoCommand(Command):
@@ -210,11 +164,6 @@ class InfoCommand(Command):
     def execute(self, db, replica_handler, conn):
         return replica_handler.get_info()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return InfoCommand(craft_command("INFO").encode())
-
 
 class ReplConfCommand(Command):
     expected_arg_count = [0]
@@ -224,11 +173,6 @@ class ReplConfCommand(Command):
 
     def execute(self, db, replica_handler, conn):
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ReplConfCommand(craft_command("REPLCONF").encode())
 
 
 class ReplConfAckCommand(Command):
@@ -241,11 +185,6 @@ class ReplConfAckCommand(Command):
     def execute(self, db, replica_handler, conn):
         replica_handler.incr_ack_count()
         return []
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ReplConfAckCommand(craft_command("REPLCONF", "ACK", args[0]).encode())
 
 
 class ReplConfGetAckCommand(Command):
@@ -265,11 +204,6 @@ class ReplConfGetAckCommand(Command):
             ]
         ).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ReplConfGetAckCommand(craft_command("REPLCONF", "GETACK").encode())
-
 
 class PsyncCommand(Command):
     expected_arg_count = [0]
@@ -286,11 +220,6 @@ class PsyncCommand(Command):
             RespRdbFile(constants.EMPTY_RDB_FILE).encode(),
         ]
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return PsyncCommand(craft_command("PSYNC").encode())
-
 
 class FullResyncCommand(Command):
     expected_arg_count = [1]
@@ -301,11 +230,6 @@ class FullResyncCommand(Command):
 
     def execute(self, db, replica_handler, conn):
         return []
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return FullResyncCommand(craft_command("FULLRESYNC").encode())
 
 
 class RdbFileCommand(Command):
@@ -320,11 +244,6 @@ class RdbFileCommand(Command):
     def execute(self, db, replica_handler, conn):
         db.init_from_rdb(self.rdbfile.key_values)
         return []
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return RdbFileCommand(constants.EMPTY_RDB_FILE)
 
 
 class ConfigGetCommand(Command):
@@ -347,13 +266,6 @@ class ConfigGetCommand(Command):
                 ]
             ).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ConfigGetCommand(
-            craft_command("CONFIG", "GET", args[0]).encode(), args[0].encode()
-        )
-
 
 class KeysCommand(Command):
     expected_arg_count = [1]
@@ -372,11 +284,6 @@ class KeysCommand(Command):
             )
         ).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return KeysCommand(craft_command("KEYS", args[0]).encode(), args[0].encode())
-
 
 class WaitCommand(Command):
     expected_arg_count = [2]
@@ -393,13 +300,6 @@ class WaitCommand(Command):
         ack_count = replica_handler.wait(self.replica_count, self.timeout)
         return RespInteger(ack_count).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return WaitCommand(
-            craft_command("WAIT", *args).encode(), int(args[0]), int(args[1])
-        )
-
 
 class TypeCommand(Command):
     expected_arg_count = [1]
@@ -415,14 +315,6 @@ class TypeCommand(Command):
             ).encode_to_list()
         return RespSimpleString(b"none").encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return TypeCommand(
-            craft_command("TYPE", *args).encode(),
-            args[0].encode(),
-        )
-
 
 class MultiCommand(Command):
     expected_arg_count = [0]
@@ -434,11 +326,6 @@ class MultiCommand(Command):
         conn_id = construct_conn_id(conn)
         db.start_xact(conn_id)
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return MultiCommand(craft_command("MULTI", *args).encode())
 
 
 class ExecCommand(Command):
@@ -466,11 +353,6 @@ class ExecCommand(Command):
                 flattened.append(RespPlainString(response))
         return RespArray(flattened).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ExecCommand(craft_command("EXEC", *args).encode())
-
 
 class DiscardCommand(Command):
     expected_arg_count = [0]
@@ -485,11 +367,6 @@ class DiscardCommand(Command):
             return RespSimpleError(b"ERR DISCARD without MULTI").encode_to_list()
         db.pop_xact_for_exec(conn_id)
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return DiscardCommand(craft_command("DISCARD", *args).encode())
 
 
 class RpushCommand(Command):
@@ -509,15 +386,6 @@ class RpushCommand(Command):
         length = db.rpush(self.key, self.values)
         return RespInteger(length).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return RpushCommand(
-            craft_command("RPUSH", *args).encode(),
-            args[0].encode(),
-            [arg.encode() for arg in args[1:]],
-        )
-
 
 class LpushCommand(Command):
     expected_arg_count = [2]
@@ -535,15 +403,6 @@ class LpushCommand(Command):
     def execute(self, db, replica_handler, conn):
         length = db.lpush(self.key, self.values[::-1])
         return RespInteger(length).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return LpushCommand(
-            craft_command("LPUSH", *args).encode(),
-            args[0].encode(),
-            [arg.encode() for arg in args[1:]],
-        )
 
 
 class LpopCommand(Command):
@@ -564,13 +423,6 @@ class LpopCommand(Command):
                 [RespBulkString(value) for value in values]
             ).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return LpopCommand(
-            craft_command("LPOP", *args).encode(), args[0].encode(), int(args[1])
-        )
-
 
 class BlpopCommand(Command):
     expected_arg_count = [1, 2]
@@ -590,15 +442,6 @@ class BlpopCommand(Command):
             # timed out
             return transform_to_execute_output(constants.NULL_ARRAY_RESP_STRING)
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return BlpopCommand(
-            craft_command("BLPOP", *args).encode(),
-            args[0].encode(),
-            int(args[1]) if len(args) > 1 else 0,
-        )
-
 
 class LlenCommand(Command):
     expected_arg_count = [1]
@@ -617,14 +460,6 @@ class LlenCommand(Command):
         else:
             length = len(db.get_list(self.key))
         return RespInteger(length).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return LlenCommand(
-            craft_command("LLEN", *args).encode(),
-            args[0].encode(),
-        )
 
 
 class LrangeCommand(Command):
@@ -650,16 +485,6 @@ class LrangeCommand(Command):
         return RespArray(
             [RespBulkString(val) for val in retrieved_list[self.start : adjusted_stop]]
         ).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return LrangeCommand(
-            craft_command("LRANGE", *args).encode(),
-            args[0].encode(),
-            int(args[1]),
-            int(args[2]),
-        )
 
 
 class XaddCommand(Command):
@@ -691,19 +516,6 @@ class XaddCommand(Command):
         )
         return RespBulkString(processed_stream_id.encode()).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        args_len = len(args)
-        if args_len < 2 or args_len % 2 != 0:
-            error_msg = f"{cls.__name__} takes an even number of argument(s), but {args_len} {'was' if args_len == 1 else 'were'} provided"
-            raise exceptions.RequestCraftError(error_msg)
-
-        return XaddCommand(
-            craft_command("XADD", *args).encode(),
-            args[0].encode(),
-            list(map(lambda x: RespBulkString(x.encode()), args[1:])),
-        )
-
 
 class XrangeCommand(Command):
     expected_arg_count = [3]
@@ -716,13 +528,6 @@ class XrangeCommand(Command):
 
     def execute(self, db, replica_handler, conn):
         return db.xrange(self.key, self.start, self.end)
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return XrangeCommand(
-            craft_command("XRANGE", *args).encode(), args[0].encode(), args[1], args[2]
-        )
 
 
 class XreadCommand(Command):
@@ -742,24 +547,6 @@ class XreadCommand(Command):
 
     def execute(self, db, replica_handler, conn):
         return db.xread(self.stream_keys, self.ids, self.timeout)
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        if args[0].upper() == "BLOCK":
-            verify_arg_count(cls.__name__, [4], len(args))
-            return XreadCommand(
-                craft_command("XREAD", *args).encode(),
-                list(map(lambda x: x.encode(), args[2:])),
-                list(args[1:2]),
-                int(args[3]),
-            )
-        else:
-            verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-            return XreadCommand(
-                craft_command("XREAD", *args).encode(),
-                list(map(lambda x: x.encode(), args[1:])),
-                list(args[0]),
-            )
 
 
 class SubscribeCommand(Command):
@@ -781,13 +568,6 @@ class SubscribeCommand(Command):
             ]
         ).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return SubscribeCommand(
-            craft_command("SUBSCRIBE", *args).encode(), args[0].encode()
-        )
-
 
 class UnsubscribeCommand(Command):
     expected_arg_count = [1]
@@ -807,13 +587,6 @@ class UnsubscribeCommand(Command):
                 RespInteger(channel_count),
             ]
         ).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return UnsubscribeCommand(
-            craft_command("UNSUBSCRIBE", *args).encode(), args[0].encode()
-        )
 
 
 class PublishCommand(Command):
@@ -836,13 +609,6 @@ class PublishCommand(Command):
             subscribed_conn.sendall(publish_msg)
         return RespInteger(len(db.get_subscribers(self.channel_name))).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return PublishCommand(
-            craft_command("PUBLISH", *args).encode(), args[0].encode(), args[1].encode()
-        )
-
 
 class ZaddCommand(Command):
     expected_arg_count = [3]
@@ -857,16 +623,6 @@ class ZaddCommand(Command):
         return RespInteger(
             int(db.zadd(self.key, self.score, self.name))
         ).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ZaddCommand(
-            craft_command("ZADD", *args).encode(),
-            args[0].encode(),
-            float(args[1]),
-            args[2].encode(),
-        )
 
 
 class ZrankCommand(Command):
@@ -883,15 +639,6 @@ class ZrankCommand(Command):
             return transform_to_execute_output(constants.NULL_BULK_RESP_STRING)
         else:
             return RespInteger(result).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ZrankCommand(
-            craft_command("ZRANK", *args).encode(),
-            args[0].encode(),
-            args[1].encode(),
-        )
 
 
 class ZrangeCommand(Command):
@@ -912,16 +659,6 @@ class ZrangeCommand(Command):
                 [RespBulkString(item.name) for item in result]
             ).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ZrangeCommand(
-            craft_command("ZRANGE", *args).encode(),
-            args[0].encode(),
-            int(args[1]),
-            int(args[2]),
-        )
-
 
 class ZcardCommand(Command):
     expected_arg_count = [1]
@@ -933,14 +670,6 @@ class ZcardCommand(Command):
     def execute(self, db, replica_handler, conn):
         result = db.zcard(self.key)
         return RespInteger(result).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ZcardCommand(
-            craft_command("ZCARD", *args).encode(),
-            args[0].encode(),
-        )
 
 
 class ZscoreCommand(Command):
@@ -958,15 +687,6 @@ class ZscoreCommand(Command):
         else:
             return RespBulkString(str(result).encode()).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ZscoreCommand(
-            craft_command("ZSCORE", *args).encode(),
-            args[0].encode(),
-            args[1].encode(),
-        )
-
 
 class ZremCommand(Command):
     expected_arg_count = [2]
@@ -979,15 +699,6 @@ class ZremCommand(Command):
     def execute(self, db, replica_handler, conn):
         result = db.zrem(self.key, self.name)
         return RespInteger(result).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return ZremCommand(
-            craft_command("ZREM", *args).encode(),
-            args[0].encode(),
-            args[1].encode(),
-        )
 
 
 class GeoaddCommand(Command):
@@ -1014,17 +725,6 @@ class GeoaddCommand(Command):
             return RespSimpleError(b"ERR invalid latitude").encode_to_list()
         score = encode_score(self.longitude, self.latitude)
         return RespInteger(int(db.zadd(self.key, score, self.member))).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return GeoaddCommand(
-            craft_command("GEOADD", *args).encode(),
-            args[0].encode(),
-            float(args[1].encode()),
-            float(args[2].encode()),
-            args[3].encode(),
-        )
 
 
 class GeoposCommand(Command):
@@ -1056,18 +756,6 @@ class GeoposCommand(Command):
             ]
         ).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        args_len = len(args)
-        if args_len < 3:
-            error_msg = f"{cls.__name__} takes at least 3 arguments, but {args_len} {'was' if args_len == 1 else 'were'} provided"
-            raise exceptions.RequestCraftError(error_msg)
-        return GeoposCommand(
-            craft_command("GEOPOS", *args).encode(),
-            args[0].encode(),
-            [arg.encode() for arg in args[1:]],
-        )
-
 
 class GeodistCommand(Command):
     expected_arg_count = [3]
@@ -1083,16 +771,6 @@ class GeodistCommand(Command):
         if geodist is None:
             return constants.NULL_BULK_RESP_STRING
         return RespBulkString(str(geodist).encode()).encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return GeodistCommand(
-            craft_command("GEODIST", *args).encode(),
-            args[0].encode(),
-            args[1].encode(),
-            args[2].encode(),
-        )
 
 
 class GeosearchCommand(Command):
@@ -1129,20 +807,6 @@ class GeosearchCommand(Command):
         )
         return RespArray([RespBulkString(name) for name in results]).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return GeosearchCommand(
-            craft_command("GEOSEARCH", *args).encode(),
-            args[0].encode(),
-            args[1].encode(),
-            float(args[2].encode()),
-            float(args[3].encode()),
-            args[4].encode(),
-            float(args[5].encode()),
-            args[6].encode(),
-        )
-
 
 class AclWhoamiCommand(Command):
     expected_arg_count = [0]
@@ -1153,13 +817,6 @@ class AclWhoamiCommand(Command):
 
     def execute(self, db, replica_handler, conn):
         return RespBulkString(b"default").encode_to_list()
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return AclWhoamiCommand(
-            craft_command("ACL WHOAMI", *args).encode(),
-        )
 
 
 class AclGetuserCommand(Command):
@@ -1184,14 +841,6 @@ class AclGetuserCommand(Command):
             ]
         ).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return AclGetuserCommand(
-            craft_command("ACL GETUSER", *args).encode(),
-            args[0].encode(),
-        )
-
 
 class AclSetuserCommand(Command):
     expected_arg_count = [2]
@@ -1211,15 +860,6 @@ class AclSetuserCommand(Command):
             raise exceptions.UnsupportedOperationError(
                 "SETUSER is only allowed for setting passwords with >"
             )
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return AclSetuserCommand(
-            craft_command("ACL SETUSER", *args).encode(),
-            args[0].encode(),
-            args[1].encode(),
-        )
 
 
 class AuthCommand(Command):
@@ -1241,15 +881,6 @@ class AuthCommand(Command):
                 b"WRONGPASS invalid username-password pair or user is disabled."
             ).encode_to_list()
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return AuthCommand(
-            craft_command("AUTH", *args).encode(),
-            args[0].encode(),
-            args[1].encode(),
-        )
-
 
 class WatchCommand(Command):
     xact_behaviour = XactBehaviour.ERROR
@@ -1264,17 +895,6 @@ class WatchCommand(Command):
             db.watch_key(conn_id, key)
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
 
-    @classmethod
-    def craft_request(cls, *args: str):
-        args_len = len(args)
-        if args_len < 2:
-            error_msg = f"{cls.__name__} takes at least 1 arguments, but {args_len} {'was' if args_len == 1 else 'were'} provided"
-            raise exceptions.RequestCraftError(error_msg)
-        return WatchCommand(
-            craft_command("WATCH", *args).encode(),
-            [arg.encode() for arg in args],
-        )
-
 
 class UnwatchCommand(Command):
     expected_arg_count = [0]
@@ -1286,13 +906,6 @@ class UnwatchCommand(Command):
         conn_id = construct_conn_id(conn)
         db.clear_watched_keys(conn_id)
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
-
-    @classmethod
-    def craft_request(cls, *args: str):
-        verify_arg_count(cls.__name__, cls.expected_arg_count, len(args))
-        return UnwatchCommand(
-            craft_command("UNWATCH", *args).encode(),
-        )
 
 
 def verify_arg_count(

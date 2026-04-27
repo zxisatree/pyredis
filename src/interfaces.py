@@ -132,8 +132,3 @@ class Command(ABC):
             raise ExecuteForAofError(
                 f"For {self.keyword} commands, {self.should_write_to_aof=}, execute_for_aof is not allowed"
             )
-
-    # @classmethod
-    # @abstractmethod
-    # # might raise RequestCraftError
-    # def craft_request(cls, *args: str) -> Self: ...
