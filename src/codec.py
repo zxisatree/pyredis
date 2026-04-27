@@ -1,4 +1,5 @@
 from . import commands, data_types
+from .exceptions import UnsupportedOperationError
 from .logs import logger
 
 
@@ -44,23 +45,26 @@ def parse_resp_cmd(
     if cmd_str == b"PING":
         return commands.PingCommand(raw_cmd)
     elif cmd_str == b"ECHO":
-        msg = resp_elements[1]
+        msg = resp_elements[1].data
         return commands.EchoCommand(raw_cmd, msg)
     elif cmd_str == b"SET":
-        key = resp_elements[1]
-        value = resp_elements[2]
+        key = resp_elements[1].data
+        value = resp_elements[2].data
         if len(resp_data) <= 3:
             return commands.SetCommand(raw_cmd, key, value, None)
-        px_cmd = resp_elements[3]
-        expiry = resp_elements[4]
-        commands.SetCommand.validate_px(px_cmd)
+        px_cmd = resp_elements[3].data
+        expiry = resp_elements[4].data
+        if px_cmd.upper() != b"PX":
+            raise UnsupportedOperationError(
+                f"Unsupported SET command (fourth element exists but is not 'PX') {px_cmd}"
+            )
         return commands.SetCommand(raw_cmd, key, value, expiry)
     elif cmd_str == b"GET":
-        key = resp_elements[1]
-        return commands.GetCommand(raw_cmd, key.data)
+        key = resp_elements[1].data
+        return commands.GetCommand(raw_cmd, key)
     elif cmd_str == b"INCR":
-        key = resp_elements[1]
-        return commands.IncrCommand(raw_cmd, key.data)
+        key = resp_elements[1].data
+        return commands.IncrCommand(raw_cmd, key)
     elif cmd_str == b"COMMAND":
         return commands.CommandCommand(raw_cmd)
     elif cmd_str == b"INFO":
@@ -68,27 +72,27 @@ def parse_resp_cmd(
         return commands.InfoCommand(raw_cmd)
     elif cmd_str == b"REPLCONF":
         if len(resp_data) >= 3:
-            cmd_str2 = resp_elements[1]
-            if cmd_str2.data.upper() == b"GETACK":
+            cmd_str2 = resp_elements[1].data
+            if cmd_str2.upper() == b"GETACK":
                 return commands.ReplConfGetAckCommand(raw_cmd)
-            elif cmd_str2.data.upper() == b"ACK":
+            elif cmd_str2.upper() == b"ACK":
                 return commands.ReplConfAckCommand(raw_cmd)
         return commands.ReplConfCommand(raw_cmd)
     elif cmd_str == b"WAIT":
-        replica_count = resp_elements[1]
-        timeout = resp_elements[2]
-        return commands.WaitCommand(raw_cmd, int(replica_count.data), int(timeout.data))
+        replica_count = resp_elements[1].data
+        timeout = resp_elements[2].data
+        return commands.WaitCommand(raw_cmd, int(replica_count), int(timeout))
     elif cmd_str == b"PSYNC":
         return commands.PsyncCommand(raw_cmd)
     elif cmd_str == b"CONFIG":
-        key = resp_elements[2]
-        return commands.ConfigGetCommand(raw_cmd, key.data)
+        key = resp_elements[2].data
+        return commands.ConfigGetCommand(raw_cmd, key)
     elif cmd_str == b"KEYS":
-        pattern = resp_elements[1]
-        return commands.KeysCommand(raw_cmd, pattern.data)
+        pattern = resp_elements[1].data
+        return commands.KeysCommand(raw_cmd, pattern)
     elif cmd_str == b"TYPE":
-        key = resp_elements[1]
-        return commands.TypeCommand(raw_cmd, key.data)
+        key = resp_elements[1].data
+        return commands.TypeCommand(raw_cmd, key)
     elif cmd_str == b"MULTI":
         return commands.MultiCommand(raw_cmd)
     elif cmd_str == b"EXEC":
@@ -96,15 +100,15 @@ def parse_resp_cmd(
     elif cmd_str == b"DISCARD":
         return commands.DiscardCommand(raw_cmd)
     elif cmd_str == b"RPUSH":
-        key = resp_elements[1]
+        key = resp_elements[1].data
         values = [value.data for value in resp_elements[2:]]
-        return commands.RpushCommand(raw_cmd, key.data, values)
+        return commands.RpushCommand(raw_cmd, key, values)
     elif cmd_str == b"LPUSH":
-        key = resp_elements[1]
+        key = resp_elements[1].data
         values = [value.data for value in resp_elements[2:]]
-        return commands.LpushCommand(raw_cmd, key.data, values)
+        return commands.LpushCommand(raw_cmd, key, values)
     elif cmd_str == b"LPOP":
-        key = resp_elements[1]
+        key = resp_elements[1].data
         if len(resp_data) == 3:
             try:
                 count = int(resp_elements[2].data)
@@ -115,9 +119,9 @@ def parse_resp_cmd(
                 count = 0
         else:
             count = 1
-        return commands.LpopCommand(raw_cmd, key.data, count)
+        return commands.LpopCommand(raw_cmd, key, count)
     elif cmd_str == b"BLPOP":
-        key = resp_elements[1]
+        key = resp_elements[1].data
         if len(resp_data) == 3:
             try:
                 timeout = float(resp_elements[2].data)
@@ -128,12 +132,12 @@ def parse_resp_cmd(
                 timeout = 0
         else:
             timeout = 0
-        return commands.BlpopCommand(raw_cmd, key.data, timeout)
+        return commands.BlpopCommand(raw_cmd, key, timeout)
     elif cmd_str == b"LLEN":
-        key = resp_elements[1]
-        return commands.LlenCommand(raw_cmd, key.data)
+        key = resp_elements[1].data
+        return commands.LlenCommand(raw_cmd, key)
     elif cmd_str == b"LRANGE":
-        key = resp_elements[1]
+        key = resp_elements[1].data
         try:
             lrange_start = int(resp_elements[2].data)
             lrange_stop = int(resp_elements[3].data)
@@ -141,58 +145,59 @@ def parse_resp_cmd(
             logger.error("Tried to LRANGE with non int start/stop. Defaulting to 0, 0")
             lrange_start = 0
             lrange_stop = 0
-        return commands.LrangeCommand(raw_cmd, key.data, lrange_start, lrange_stop)
+        return commands.LrangeCommand(raw_cmd, key, lrange_start, lrange_stop)
     elif cmd_str == b"ZADD":
-        set_key = resp_elements[1]
-        score = resp_elements[2]
-        name = resp_elements[3]
+        set_key = resp_elements[1].data
+        score = resp_elements[2].data
+        name = resp_elements[3].data
         try:
-            zadd_score = float(score.data)
+            zadd_score = float(score)
         except ValueError:
             logger.error("Tried to ZADD with non float score, defaulting to 0.0")
             zadd_score = 0.0
-        return commands.ZaddCommand(raw_cmd, set_key.data, zadd_score, name.data)
+        return commands.ZaddCommand(raw_cmd, set_key, zadd_score, name)
     elif cmd_str == b"ZRANK":
-        set_key = resp_elements[1]
-        name = resp_elements[2]
-        return commands.ZrankCommand(raw_cmd, set_key.data, name.data)
+        set_key = resp_elements[1].data
+        name = resp_elements[2].data
+        return commands.ZrankCommand(raw_cmd, set_key, name)
     elif cmd_str == b"ZRANGE":
-        set_key = resp_elements[1]
-        zrange_start = resp_elements[2]
-        zrange_end = resp_elements[3]
+        set_key = resp_elements[1].data
+        zrange_start = resp_elements[2].data
+        zrange_end = resp_elements[3].data
         return commands.ZrangeCommand(
-            raw_cmd, set_key.data, int(zrange_start.data), int(zrange_end.data)
+            raw_cmd, set_key, int(zrange_start), int(zrange_end)
         )
     elif cmd_str == b"ZCARD":
-        set_key = resp_elements[1]
-        return commands.ZcardCommand(raw_cmd, set_key.data)
+        set_key = resp_elements[1].data
+        return commands.ZcardCommand(raw_cmd, set_key)
     elif cmd_str == b"ZSCORE":
-        set_key = resp_elements[1]
-        name = resp_elements[2]
-        return commands.ZscoreCommand(raw_cmd, set_key.data, name.data)
+        set_key = resp_elements[1].data
+        name = resp_elements[2].data
+        return commands.ZscoreCommand(raw_cmd, set_key, name)
     elif cmd_str == b"ZREM":
-        set_key = resp_elements[1]
-        name = resp_elements[2]
-        return commands.ZremCommand(raw_cmd, set_key.data, name.data)
+        set_key = resp_elements[1].data
+        name = resp_elements[2].data
+        return commands.ZremCommand(raw_cmd, set_key, name)
     elif cmd_str == b"XADD":
-        stream_key = resp_elements[1]
-        return commands.XaddCommand(raw_cmd, stream_key.data, resp_elements[2:])
+        stream_key = resp_elements[1].data
+        values = [value.data for value in resp_elements[2:]]
+        return commands.XaddCommand(raw_cmd, stream_key, values)
     elif cmd_str == b"XRANGE":
-        key = resp_elements[1]
-        xrange_start = resp_elements[2]
-        xrange_end = resp_elements[3]
+        key = resp_elements[1].data
+        xrange_start = resp_elements[2].data
+        xrange_end = resp_elements[3].data
         return commands.XrangeCommand(
             raw_cmd,
-            key.data,
-            xrange_start.data.decode(),
-            xrange_end.data.decode(),
+            key,
+            xrange_start.decode(),
+            xrange_end.decode(),
         )
     elif cmd_str == b"XREAD":
         # first argument should be "streams"
-        streams = resp_elements[1]
+        streams = resp_elements[1].data
         key_id_start_idx = 2
         is_block = False
-        if streams.data.upper() == b"BLOCK":
+        if streams.upper() == b"BLOCK":
             is_block = True
             key_id_start_idx = 4
         remaining_len = len(resp_data) - key_id_start_idx
@@ -207,8 +212,8 @@ def parse_resp_cmd(
             for i in resp_elements[key_id_start_idx + remaining_len // 2 :]
         ]
         if is_block:
-            timeout = resp_elements[2]
-            return commands.XreadCommand(raw_cmd, keys, ids, int(timeout.data.decode()))
+            timeout = resp_elements[2].data
+            return commands.XreadCommand(raw_cmd, keys, ids, int(timeout.decode()))
         else:
             return commands.XreadCommand(raw_cmd, keys, ids)
     elif cmd_str == b"SUBSCRIBE":
@@ -288,7 +293,6 @@ def parse_resp_cmd(
         elif subcmd == b"SETUSER":
             user = resp_elements[2].data
             property = resp_elements[3].data
-            # properties = [resp_element.data for resp_element in resp_elements[3:]]
             return commands.AclSetuserCommand(raw_cmd, user, property)
         else:
             raise Exception(f"unknown ACL command {raw_cmd=}")

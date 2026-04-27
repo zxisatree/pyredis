@@ -47,9 +47,9 @@ class PingCommand(Command):
 class EchoCommand(Command):
     expected_arg_count = [1]
 
-    def __init__(self, raw_cmd: bytes, bulk_str: RespBulkString):
+    def __init__(self, raw_cmd: bytes, bulk_str: bytes):
         self._raw_cmd = raw_cmd
-        self.msg = bulk_str.data
+        self.msg = bulk_str
 
     def execute(self, db, replica_handler, conn):
         return RespBulkString(self.msg).encode_to_list()
@@ -63,17 +63,15 @@ class SetCommand(Command):
     def __init__(
         self,
         raw_cmd: bytes,
-        key: RespBulkString,
-        value: RespBulkString,
-        expiry: RespBulkString | None,
+        key: bytes,
+        value: bytes,
+        expiry: bytes | None,
     ):
         self._raw_cmd = raw_cmd
-        self.key = key.data
-        self.value = value.data
+        self.key = key
+        self.value = value
         self.expiry = (
-            (datetime.now() + timedelta(milliseconds=int(expiry.data)))
-            if expiry
-            else None
+            (datetime.now() + timedelta(milliseconds=int(expiry))) if expiry else None
         )
 
     def execute(self, db, replica_handler, conn):
@@ -83,13 +81,6 @@ class SetCommand(Command):
     def execute_for_aof(self, db: Database) -> list[bytes]:
         db.set_string_value(self.key, (self.value.decode(), self.expiry))
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
-
-    @staticmethod
-    def validate_px(px_cmd: RespBulkString):
-        if px_cmd.data.upper() != b"PX":
-            raise exceptions.UnsupportedOperationError(
-                f"Unsupported SET command (fourth element is not 'PX') {px_cmd.data}"
-            )
 
 
 class IncrCommand(Command):
@@ -488,10 +479,10 @@ class LrangeCommand(Command):
 
 
 class XaddCommand(Command):
-    def __init__(self, raw_cmd: bytes, stream_key: bytes, data: list[RespBulkString]):
+    def __init__(self, raw_cmd: bytes, stream_key: bytes, values: list[bytes]):
         self._raw_cmd = raw_cmd
         self.stream_key = stream_key
-        self.data = data
+        self.values = values
 
     def execute(
         self,
@@ -499,17 +490,16 @@ class XaddCommand(Command):
         replica_handler,
         conn,
     ):
-        raw_stream_entry_id = self.data[0]
-        stream_entry_id = raw_stream_entry_id.data
+        stream_entry_id = self.values[0]
         err = db.validate_stream_id(self.stream_key, stream_entry_id.decode())
         if err is not None:
             return RespSimpleError(err).encode_to_list()
 
         kv_dict = {}
-        for i in range(1, len(self.data), 2):
-            stream_key = self.data[i]
-            stream_value = self.data[i + 1]
-            kv_dict[stream_key.data.decode()] = stream_value.data.decode()
+        for i in range(1, len(self.values), 2):
+            stream_key = self.values[i]
+            stream_value = self.values[i + 1]
+            kv_dict[stream_key.decode()] = stream_value.decode()
         logger.info(f"{stream_entry_id=}, {kv_dict=}")
         processed_stream_id = db.xadd(
             self.stream_key, stream_entry_id.decode(), kv_dict

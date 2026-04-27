@@ -1,5 +1,5 @@
-from datetime import timedelta
 import socket
+from datetime import timedelta
 from enum import Enum
 from secrets import token_hex
 from threading import Condition
