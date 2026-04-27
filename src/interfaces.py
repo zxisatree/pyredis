@@ -102,7 +102,7 @@ class Command(ABC):
 
     def __init__(self):
         self._raw_cmd = b""
-        self._keyword = b""
+        # self._keyword = b""
 
     # replicas require this, but there's no good way to enforce properties on subclasses. It's either this with bad developer experience (need to write self._raw_cmd instead of self.raw_cmd in __init__) or runtime checks (slow, use reflection)
     @property
@@ -111,7 +111,8 @@ class Command(ABC):
 
     @property
     def keyword(self) -> bytes:
-        return self._keyword
+        return self.__class__.__name__.replace("Command", "").lower().encode()
+        # return self._keyword
 
     @abstractmethod
     def execute(

@@ -233,6 +233,10 @@ def validate_parse_args(
         appendfsync = aof.AppendFsyncOption.ALWAYS
     elif args.appendfsync == "everysec":
         appendfsync = aof.AppendFsyncOption.EVERYSEC
+    else:
+        raise ArgParseError(
+            f"Invalid appendfsync option {args.appendfsync}, should be one of ('always', 'everysec')"
+        )
 
     return (
         args.port,
