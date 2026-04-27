@@ -1,7 +1,9 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 import socket
 from enum import Enum
 from secrets import token_hex
+from threading import Condition
+from time import monotonic
 
 from . import commands, constants
 from .codec import parse_cmd
@@ -33,6 +35,7 @@ class ReplicaHandler(metaclass=SingletonMeta):
     ):
         self.is_master = is_master
         self.ack_count = 0
+        self.ack_cv = Condition()
         # self.id = str(uuid.uuid4())
         self.ip = ip
         self.port = port
@@ -48,13 +51,16 @@ class ReplicaHandler(metaclass=SingletonMeta):
         self.db = db
 
     def incr_ack_count(self):
-        logger.info(f"incrementing {self.ack_count=} to {self.ack_count + 1}")
-        self.ack_count += 1
+        with self.ack_cv:
+            logger.info(f"incrementing {self.ack_count=} to {self.ack_count + 1}")
+            self.ack_count += 1
+            self.ack_cv.notify_all()
 
     def wait(self, replica_count: int, timeout: timedelta):
-        now = datetime.now()
-        end = now + timeout
-        self.ack_count = 0
+        now = monotonic()
+        end = now + timeout.total_seconds()
+        with self.ack_cv:
+            self.ack_count = 0
         self.propogate(
             RespArray(
                 [
@@ -65,10 +71,11 @@ class ReplicaHandler(metaclass=SingletonMeta):
             ).encode()
         )
         logger.info("finished sending to all slaves")
-        while self.ack_count < replica_count and datetime.now() < end:
-            pass
+        with self.ack_cv:
+            while self.ack_count < replica_count and monotonic() < end:
+                self.ack_cv.wait(timeout=max(0, end - monotonic()))
 
-        logger.info(f"{self.ack_count=}, {datetime.now() - end=} (should be positive)")
+        logger.info(f"{self.ack_count=}, {monotonic() - end=} (should be positive)")
         return self.ack_count
 
     def master_recv_loop(self):
