@@ -1010,7 +1010,7 @@ class ZscoreCommand(Command):
 
     def execute(self, db, replica_handler, conn):
         result = db.zscore(self.key, self.name)
-        if result == -1:
+        if result is None:
             return transform_to_execute_output(constants.NULL_BULK_RESP_STRING)
         else:
             return RespBulkString(str(result).encode()).encode_to_list()
@@ -1140,9 +1140,10 @@ class GeodistCommand(Command):
         self.place2 = place2
 
     def execute(self, db, replica_handler, conn):
-        return RespBulkString(
-            str(db.geodist(self.key, self.place1, self.place2)).encode()
-        ).encode_to_list()
+        geodist = db.geodist(self.key, self.place1, self.place2)
+        if geodist is None:
+            return constants.NULL_BULK_RESP_STRING
+        return RespBulkString(str(geodist).encode()).encode_to_list()
 
     @classmethod
     def craft_request(cls, *args: str):

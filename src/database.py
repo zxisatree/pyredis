@@ -53,22 +53,18 @@ class SortedSet:
                 return idx
         return -1
 
-    def score(self, name: bytes) -> float:
+    def score(self, name: bytes) -> float | None:
         for item in self.set:
             if item.name == name:
                 return item.score
-        return -1
+        return None
 
     def upsert_item(self, item: Item) -> int:
-        if item.name in self.names:
-            for stored_item in self.set:
-                if stored_item.name == item.name:
-                    stored_item.score = item.score
-            return 0
-        else:
-            bisect.insort(self.set, item)
-            self.names.add(item.name)
-            return 1
+        # to maintain sorted order, we need to delete and reinsert
+        was_removed = self.remove(item.name)
+        bisect.insort(self.set, item)
+        self.names.add(item.name)
+        return not was_removed
 
     def add(self, name: bytes, score: float) -> int:
         return self.upsert_item(SortedSet.Item(score, name))
@@ -77,6 +73,7 @@ class SortedSet:
         for idx, item in enumerate(self.set):
             if item.name == name:
                 self.set.pop(idx)
+                self.names.remove(name)
                 return 1
         return 0
 
@@ -557,7 +554,7 @@ class Database(metaclass=SingletonMeta):
             return 0
         return len(self.store[key])
 
-    def zscore(self, key: bytes, name: bytes) -> float:
+    def zscore(self, key: bytes, name: bytes) -> float | None:
         if key not in self.store or self.key_types[key] != Database.ValType.SET:
             return 0
         value = self.store[key]
@@ -578,18 +575,22 @@ class Database(metaclass=SingletonMeta):
             return [None for _ in members]
         value = self.store[key]
         set_val = cast(SortedSet, value)
+        scores = (set_val.score(member) for member in members)
         return [
-            decode_score(int(set_val.score(member))) if member in set_val else None
-            for member in members
+            decode_score(int(score)) if score is not None else None for score in scores
         ]
 
-    def geodist(self, key: bytes, place1: bytes, place2: bytes) -> float:
+    def geodist(self, key: bytes, place1: bytes, place2: bytes) -> float | None:
         if key not in self.store or self.key_types[key] != Database.ValType.SET:
             return 0
         value = self.store[key]
         set_val = cast(SortedSet, value)
-        lon1, lat1 = decode_score(int(set_val.score(place1)))
-        lon2, lat2 = decode_score(int(set_val.score(place2)))
+        score1 = set_val.score(place1)
+        score2 = set_val.score(place2)
+        if score1 is None or score2 is None:
+            return None
+        lon1, lat1 = decode_score(int(score1))
+        lon2, lat2 = decode_score(int(score2))
         return haversines(lon1, lat1, lon2, lat2)
 
     def geosearch(
