@@ -5,8 +5,8 @@ from secrets import token_hex
 from threading import Condition
 from time import monotonic
 
-from . import commands, constants
-from .codec import parse_cmd
+from . import commands, constants, interfaces
+from .codec import parse_bytes_into_cmds
 from .data_types import RespArray, RespBulkString
 from .database import Database
 from .logs import logger
@@ -88,9 +88,9 @@ class ReplicaHandler(metaclass=SingletonMeta):
             if not data:
                 logger.info("EOF/no data received, replica breaking")
                 break
-            cmds = parse_cmd(data)
+            cmds, raw_cmds = parse_bytes_into_cmds(data)
             logger.info(f"replica {cmds=}")
-            self._execute_cmds(cmds)
+            self._execute_cmds(list(zip(cmds, raw_cmds)))
 
     def connect_to_master(self):
         """Performs the master slave handshake. Has the side effect of executing any commands that come directly after the handshake (there should be none)."""
@@ -132,7 +132,7 @@ class ReplicaHandler(metaclass=SingletonMeta):
                 )
                 # expect any rdb file
                 data = self.master_conn.recv(constants.BUFFER_SIZE)
-                cmds = parse_cmd(data)
+                cmds, raw_cmds = parse_bytes_into_cmds(data)
                 logger.info(f"handshake {cmds=}")
 
                 # receive the FULLRESYNC command
@@ -143,14 +143,14 @@ class ReplicaHandler(metaclass=SingletonMeta):
                     if not isinstance(cmds[1], commands.RdbFileCommand):
                         raise Exception(f"replica expected RDB file, got {data}")
                     rdb_cmd = cmds[1]
-                    rest_cmds = cmds[2:]
+                    rest_cmds = list(zip(cmds, raw_cmds))[2:]
                 else:
                     data = self.master_conn.recv(constants.BUFFER_SIZE)
-                    cmds = parse_cmd(data)
+                    cmds, raw_cmds = parse_bytes_into_cmds(data)
                     if not cmds or not isinstance(cmds[0], commands.RdbFileCommand):
                         raise Exception(f"replica expected RDB file, got {data}")
                     rdb_cmd = cmds[0]
-                    rest_cmds = cmds[1:]
+                    rest_cmds = list(zip(cmds, raw_cmds))[1:]
                 # receive the RDB file, then leave the rest to the main loop
                 # initialise DB with the RDB file
                 rdb_cmd.execute(self.db, self, self.master_conn)
@@ -158,15 +158,15 @@ class ReplicaHandler(metaclass=SingletonMeta):
                 logger.info("connect_to_master_sm complete")
                 self.handshake_state = ReplicaHandler.ReplicaHandshakeState.DONE
 
-    def _execute_cmds(self, cmds: list[commands.Command]):
-        for cmd in cmds:
+    def _execute_cmds(self, cmds: list[tuple[interfaces.Command, bytes]]):
+        for cmd, raw_cmd in cmds:
             executed = cmd.execute(self.db, self, self.master_conn)
             if isinstance(cmd, commands.ReplConfGetAckCommand):
                 for resp in executed:
                     logger.info(f"responding to master: {resp}")
                     self.master_conn.sendall(resp)
             # need to update offset based on cmd in list, not based on full data
-            self.master_repl_offset += len(cmd.raw_cmd)
+            self.master_repl_offset += len(raw_cmd)
 
     def _expect_handshake(self, expected: bytes):
         """Receives data from master and asserts that the response is expected, based on self.handshake_state"""

@@ -11,7 +11,7 @@ from . import (
     data_types,
     rdb,
 )
-from .codec import parse_cmd
+from .codec import parse_bytes_into_cmds
 from .commands import Command
 from .database import Database
 from .exceptions import ArgParseError
@@ -55,7 +55,7 @@ def main(args: Sequence[str] | None = None):
             Thread(target=replica_handler.master_recv_loop).start()
 
         aof_cmd_data = aof_handler.read()
-        aof_cmds = parse_cmd(aof_cmd_data)
+        aof_cmds, _ = parse_bytes_into_cmds(aof_cmd_data)
         logger.info(f"{aof_cmd_data=}, {aof_cmds=}")
         for cmd in aof_cmds:
             cmd.execute_for_aof(db)
@@ -136,11 +136,11 @@ def handle_conn(
             if not data:
                 break
             logger.info(f"raw {data=}")
-            cmds = parse_cmd(data)
+            cmds, raw_cmds = parse_bytes_into_cmds(data)
             logger.info(f"{cmds=}")
-            for cmd in cmds:
+            for cmd, raw_cmd in list(zip(cmds, raw_cmds)):
                 execute_cmd_for_conn(
-                    cmd, db, replica_handler, aof_handler, conn, conn_id
+                    cmd, raw_cmd, db, replica_handler, aof_handler, conn, conn_id
                 )
 
         logger.info(f"Connection closed: {addr=}")
@@ -148,6 +148,7 @@ def handle_conn(
 
 def execute_cmd_for_conn(
     cmd: Command,
+    raw_cmd: bytes,
     db: Database,
     replica_handler: ReplicaHandler,
     aof_handler: aof.AofHandler,
@@ -173,9 +174,9 @@ def execute_cmd_for_conn(
         ).encode_to_list()
     else:
         if cmd.should_propogate_to_replicas:
-            replica_handler.propogate(cmd._raw_cmd)
+            replica_handler.propogate(raw_cmd)
         if cmd.should_write_to_aof:
-            aof_handler.write(cmd.raw_cmd)
+            aof_handler.write(raw_cmd)
         executed = cmd.execute(db, replica_handler, conn)
 
     for resp in executed:

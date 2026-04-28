@@ -1,19 +1,23 @@
-from . import commands, data_types
+from . import commands, data_types, interfaces
 from .exceptions import UnsupportedOperationError
 from .logs import logger
 
 
-def parse_cmd(cmd: bytes) -> list[commands.Command]:
-    final_cmds: list[commands.Command] = []
+def parse_bytes_into_cmds(
+    cmd_bytes: bytes,
+) -> tuple[list[interfaces.Command], list[bytes]]:
+    final_cmds: list[interfaces.Command] = []
+    final_raw_cmds: list[bytes] = []
     pos = 0
-    while pos < len(cmd):
+    while pos < len(cmd_bytes):
         orig = pos
-        resp_data, pos = data_types.dispatch(cmd, pos)
+        resp_data, pos = data_types.dispatch(cmd_bytes, pos)
+        final_raw_cmds.append(cmd_bytes[orig:pos])
         logger.info(f"Codec.parse {resp_data=}, {pos=}")
         match resp_data:
             # works like an isinstance, does not actually instantiate new instances every fn call
             case data_types.RespArray():
-                final_cmds.append(parse_resp_cmd(resp_data, cmd, orig, pos))
+                final_cmds.append(parse_resp_cmd(resp_data, cmd_bytes, orig, pos))
             case data_types.RespSimpleString():
                 # is +FULLRESYNC
                 final_cmds.append(commands.FullResyncCommand(resp_data.data))
@@ -23,13 +27,13 @@ def parse_cmd(cmd: bytes) -> list[commands.Command]:
                 logger.error(
                     f"Unsupported command (is not array) {resp_data}, {type(resp_data)}"
                 )
-                final_cmds.append(commands.NoOpCommand(cmd[orig:pos]))
-    return final_cmds
+                final_cmds.append(commands.NoOpCommand(cmd_bytes[orig:pos]))
+    return final_cmds, final_raw_cmds
 
 
 def parse_resp_cmd(
     resp_data: data_types.RespArray, cmd: bytes, start: int, end: int
-) -> commands.Command:
+) -> interfaces.Command:
     resp_elements: list[data_types.RespBulkString] = []
     for element in resp_data.elements:
         result = data_types.RespBulkString.safe_validate(element)
