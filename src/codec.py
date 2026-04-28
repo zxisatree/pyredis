@@ -27,7 +27,7 @@ def parse_bytes_into_cmds(
                 logger.error(
                     f"Unsupported command (is not array) {resp_data}, {type(resp_data)}"
                 )
-                final_cmds.append(commands.NoOpCommand(cmd_bytes[orig:pos]))
+                final_cmds.append(commands.NoOpCommand())
     return final_cmds, final_raw_cmds
 
 
@@ -41,76 +41,76 @@ def parse_resp_cmd(
             logger.error(
                 f"Unsupported command {cmd[start:end]}, {element} is not a bulk string"
             )
-            return commands.NoOpCommand(cmd[start:end])
+            return commands.NoOpCommand()
         resp_elements.append(result[0])
 
     cmd_str = resp_elements[0].data.upper()
     raw_cmd = cmd[start:end]
     if cmd_str == b"PING":
-        return commands.PingCommand(raw_cmd)
+        return commands.PingCommand()
     elif cmd_str == b"ECHO":
         msg = resp_elements[1].data
-        return commands.EchoCommand(raw_cmd, msg)
+        return commands.EchoCommand(msg)
     elif cmd_str == b"SET":
         key = resp_elements[1].data
         value = resp_elements[2].data
         if len(resp_data) <= 3:
-            return commands.SetCommand(raw_cmd, key, value, None)
+            return commands.SetCommand(key, value, None)
         px_cmd = resp_elements[3].data
         expiry = resp_elements[4].data
         if px_cmd.upper() != b"PX":
             raise UnsupportedOperationError(
                 f"Unsupported SET command (fourth element exists but is not 'PX') {px_cmd}"
             )
-        return commands.SetCommand(raw_cmd, key, value, expiry)
+        return commands.SetCommand(key, value, expiry)
     elif cmd_str == b"GET":
         key = resp_elements[1].data
-        return commands.GetCommand(raw_cmd, key)
+        return commands.GetCommand(key)
     elif cmd_str == b"INCR":
         key = resp_elements[1].data
-        return commands.IncrCommand(raw_cmd, key)
+        return commands.IncrCommand(key)
     elif cmd_str == b"COMMAND":
-        return commands.CommandCommand(raw_cmd)
+        return commands.CommandCommand()
     elif cmd_str == b"INFO":
         # should check for next word, but only replication is supported
-        return commands.InfoCommand(raw_cmd)
+        return commands.InfoCommand()
     elif cmd_str == b"REPLCONF":
         if len(resp_data) >= 3:
             cmd_str2 = resp_elements[1].data
             if cmd_str2.upper() == b"GETACK":
-                return commands.ReplConfGetAckCommand(raw_cmd)
+                return commands.ReplConfGetAckCommand()
             elif cmd_str2.upper() == b"ACK":
-                return commands.ReplConfAckCommand(raw_cmd)
-        return commands.ReplConfCommand(raw_cmd)
+                return commands.ReplConfAckCommand()
+        return commands.ReplConfCommand()
     elif cmd_str == b"WAIT":
         replica_count = resp_elements[1].data
         timeout = resp_elements[2].data
-        return commands.WaitCommand(raw_cmd, int(replica_count), int(timeout))
+        return commands.WaitCommand(int(replica_count), int(timeout))
     elif cmd_str == b"PSYNC":
-        return commands.PsyncCommand(raw_cmd)
+        return commands.PsyncCommand()
     elif cmd_str == b"CONFIG":
         key = resp_elements[2].data
-        return commands.ConfigGetCommand(raw_cmd, key)
+        return commands.ConfigGetCommand(key)
     elif cmd_str == b"KEYS":
         pattern = resp_elements[1].data
-        return commands.KeysCommand(raw_cmd, pattern)
+        return commands.KeysCommand(pattern)
     elif cmd_str == b"TYPE":
         key = resp_elements[1].data
-        return commands.TypeCommand(raw_cmd, key)
+        return commands.TypeCommand(key)
     elif cmd_str == b"MULTI":
-        return commands.MultiCommand(raw_cmd)
+        return commands.MultiCommand()
     elif cmd_str == b"EXEC":
-        return commands.ExecCommand(raw_cmd)
+        return commands.ExecCommand()
     elif cmd_str == b"DISCARD":
-        return commands.DiscardCommand(raw_cmd)
+        return commands.DiscardCommand()
     elif cmd_str == b"RPUSH":
         key = resp_elements[1].data
         values = [value.data for value in resp_elements[2:]]
-        return commands.RpushCommand(raw_cmd, key, values)
+        return commands.RpushCommand(key, values)
     elif cmd_str == b"LPUSH":
         key = resp_elements[1].data
         values = [value.data for value in resp_elements[2:]]
-        return commands.LpushCommand(raw_cmd, key, values)
+        return commands.LpushCommand(key, values)
     elif cmd_str == b"LPOP":
         key = resp_elements[1].data
         if len(resp_data) == 3:
@@ -123,7 +123,7 @@ def parse_resp_cmd(
                 count = 0
         else:
             count = 1
-        return commands.LpopCommand(raw_cmd, key, count)
+        return commands.LpopCommand(key, count)
     elif cmd_str == b"BLPOP":
         key = resp_elements[1].data
         if len(resp_data) == 3:
@@ -136,10 +136,10 @@ def parse_resp_cmd(
                 timeout = 0
         else:
             timeout = 0
-        return commands.BlpopCommand(raw_cmd, key, timeout)
+        return commands.BlpopCommand(key, timeout)
     elif cmd_str == b"LLEN":
         key = resp_elements[1].data
-        return commands.LlenCommand(raw_cmd, key)
+        return commands.LlenCommand(key)
     elif cmd_str == b"LRANGE":
         key = resp_elements[1].data
         try:
@@ -149,7 +149,7 @@ def parse_resp_cmd(
             logger.error("Tried to LRANGE with non int start/stop. Defaulting to 0, 0")
             lrange_start = 0
             lrange_stop = 0
-        return commands.LrangeCommand(raw_cmd, key, lrange_start, lrange_stop)
+        return commands.LrangeCommand(key, lrange_start, lrange_stop)
     elif cmd_str == b"ZADD":
         set_key = resp_elements[1].data
         score = resp_elements[2].data
@@ -159,39 +159,36 @@ def parse_resp_cmd(
         except ValueError:
             logger.error("Tried to ZADD with non float score, defaulting to 0.0")
             zadd_score = 0.0
-        return commands.ZaddCommand(raw_cmd, set_key, zadd_score, name)
+        return commands.ZaddCommand(set_key, zadd_score, name)
     elif cmd_str == b"ZRANK":
         set_key = resp_elements[1].data
         name = resp_elements[2].data
-        return commands.ZrankCommand(raw_cmd, set_key, name)
+        return commands.ZrankCommand(set_key, name)
     elif cmd_str == b"ZRANGE":
         set_key = resp_elements[1].data
         zrange_start = resp_elements[2].data
         zrange_end = resp_elements[3].data
-        return commands.ZrangeCommand(
-            raw_cmd, set_key, int(zrange_start), int(zrange_end)
-        )
+        return commands.ZrangeCommand(set_key, int(zrange_start), int(zrange_end))
     elif cmd_str == b"ZCARD":
         set_key = resp_elements[1].data
-        return commands.ZcardCommand(raw_cmd, set_key)
+        return commands.ZcardCommand(set_key)
     elif cmd_str == b"ZSCORE":
         set_key = resp_elements[1].data
         name = resp_elements[2].data
-        return commands.ZscoreCommand(raw_cmd, set_key, name)
+        return commands.ZscoreCommand(set_key, name)
     elif cmd_str == b"ZREM":
         set_key = resp_elements[1].data
         name = resp_elements[2].data
-        return commands.ZremCommand(raw_cmd, set_key, name)
+        return commands.ZremCommand(set_key, name)
     elif cmd_str == b"XADD":
         stream_key = resp_elements[1].data
         values = [value.data for value in resp_elements[2:]]
-        return commands.XaddCommand(raw_cmd, stream_key, values)
+        return commands.XaddCommand(stream_key, values)
     elif cmd_str == b"XRANGE":
         key = resp_elements[1].data
         xrange_start = resp_elements[2].data
         xrange_end = resp_elements[3].data
         return commands.XrangeCommand(
-            raw_cmd,
             key,
             xrange_start.decode(),
             xrange_end.decode(),
@@ -217,19 +214,19 @@ def parse_resp_cmd(
         ]
         if is_block:
             timeout = resp_elements[2].data
-            return commands.XreadCommand(raw_cmd, keys, ids, int(timeout.decode()))
+            return commands.XreadCommand(keys, ids, int(timeout.decode()))
         else:
-            return commands.XreadCommand(raw_cmd, keys, ids)
+            return commands.XreadCommand(keys, ids)
     elif cmd_str == b"SUBSCRIBE":
         channel_name = resp_elements[1].data
-        return commands.SubscribeCommand(raw_cmd, channel_name)
+        return commands.SubscribeCommand(channel_name)
     elif cmd_str == b"UNSUBSCRIBE":
         channel_name = resp_elements[1].data
-        return commands.UnsubscribeCommand(raw_cmd, channel_name)
+        return commands.UnsubscribeCommand(channel_name)
     elif cmd_str == b"PUBLISH":
         channel_name = resp_elements[1].data
         msg = resp_elements[2].data
-        return commands.PublishCommand(raw_cmd, channel_name, msg)
+        return commands.PublishCommand(channel_name, msg)
     elif cmd_str == b"GEOADD":
         key = resp_elements[1].data
         longitude = resp_elements[2].data
@@ -244,18 +241,16 @@ def parse_resp_cmd(
             )
             geoadd_longitude = 0.0
             geoadd_latitude = 0.0
-        return commands.GeoaddCommand(
-            raw_cmd, key, geoadd_longitude, geoadd_latitude, member
-        )
+        return commands.GeoaddCommand(key, geoadd_longitude, geoadd_latitude, member)
     elif cmd_str == b"GEOPOS":
         key = resp_elements[1].data
         members = [resp_element.data for resp_element in resp_elements[2:]]
-        return commands.GeoposCommand(raw_cmd, key, members)
+        return commands.GeoposCommand(key, members)
     elif cmd_str == b"GEODIST":
         key = resp_elements[1].data
         place1 = resp_elements[2].data
         place2 = resp_elements[3].data
-        return commands.GeodistCommand(raw_cmd, key, place1, place2)
+        return commands.GeodistCommand(key, place1, place2)
     elif cmd_str == b"GEOSEARCH":
         key = resp_elements[1].data
         mode = resp_elements[2].data
@@ -276,7 +271,6 @@ def parse_resp_cmd(
             geosearch_latitude = 0.0
             geosearch_radius = 0
         return commands.GeosearchCommand(
-            raw_cmd,
             key,
             mode,
             geosearch_longitude,
@@ -290,27 +284,26 @@ def parse_resp_cmd(
     elif cmd_str == b"ACL":
         subcmd = resp_elements[1].data.upper()
         if subcmd == b"WHOAMI":
-            return commands.AclWhoamiCommand(raw_cmd)
+            return commands.AclWhoamiCommand()
         elif subcmd == b"GETUSER":
             user = resp_elements[2].data
-            return commands.AclGetuserCommand(raw_cmd, user)
+            return commands.AclGetuserCommand(user)
         elif subcmd == b"SETUSER":
             user = resp_elements[2].data
             property = resp_elements[3].data
-            return commands.AclSetuserCommand(raw_cmd, user, property)
+            return commands.AclSetuserCommand(user, property)
         else:
             raise Exception(f"unknown ACL command {raw_cmd=}")
     elif cmd_str == b"AUTH":
         user = resp_elements[1].data
         password = resp_elements[2].data
-        return commands.AuthCommand(raw_cmd, user, password)
+        return commands.AuthCommand(user, password)
     elif cmd_str == b"WATCH":
         keys = [resp_element.data for resp_element in resp_elements[1:]]
         return commands.WatchCommand(
-            raw_cmd,
             keys,
         )
     elif cmd_str == b"UNWATCH":
-        return commands.UnwatchCommand(raw_cmd)
+        return commands.UnwatchCommand()
     else:
         raise Exception(f"skipping unknown command {raw_cmd=}")

@@ -102,14 +102,6 @@ class Command(ABC):
     should_propogate_to_replicas = False
     should_write_to_aof = False
 
-    # def __init__(self):
-    #     self._raw_cmd = b""
-
-    # # replicas require this, but there's no good way to enforce properties on subclasses. It's either this with bad developer experience (need to write self._raw_cmd instead of self.raw_cmd in __init__) or runtime checks (slow, use reflection)
-    # @property
-    # def raw_cmd(self) -> bytes:
-    #     return self._raw_cmd
-
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if "keyword" not in cls.__dict__:
@@ -133,9 +125,3 @@ class Command(ABC):
             raise ExecuteForAofError(
                 f"For {self.keyword} commands, {self.should_write_to_aof=}, execute_for_aof is not allowed"
             )
-
-
-@dataclass
-class CommandWithRaw:
-    cmd: Command
-    raw_cmd: bytes
