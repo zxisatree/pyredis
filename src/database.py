@@ -11,11 +11,18 @@ from typing import cast
 from . import constants
 from .aof import AofHandler
 from .data_types import RespArray, RespBulkString, RespDataType
-from .interfaces import Command, ListVal, StreamId, StreamVal, StrVal
+from .interfaces import (
+    Command,
+    ConnWithId,
+    ListVal,
+    StreamId,
+    StreamVal,
+    StrVal,
+    ConnId,
+)
 from .logs import logger
 from .singleton_meta import SingletonMeta
 from .utils import (
-    ConnId,
     ThreadsafeDefaultdict,
     decode_score,
     haversines,
@@ -272,22 +279,18 @@ class Database(metaclass=SingletonMeta):
     def in_subscribed_mode(self, conn_id: ConnId) -> bool:
         return conn_id in self.channels
 
-    def subscribe(
-        self, channel_name: bytes, conn: socket.socket, conn_id: ConnId
-    ) -> int:
+    def subscribe(self, channel_name: bytes, conn: ConnWithId) -> int:
         """Subscribe to a channel, and return the number of channels the client is subscribed to"""
-        self.channels[conn_id].add(channel_name)
-        self.subscribers[channel_name].add((conn_id, conn))
-        return len(self.channels[conn_id])
+        self.channels[conn.id].add(channel_name)
+        self.subscribers[channel_name].add((conn.id, conn.socket))
+        return len(self.channels[conn.id])
 
-    def unsubscribe(
-        self, channel_name: bytes, conn: socket.socket, conn_id: ConnId
-    ) -> int:
+    def unsubscribe(self, channel_name: bytes, conn: ConnWithId) -> int:
         """Unubscribe from a channel, and return the number of channels the client is subscribed to"""
-        if channel_name in self.channels[conn_id]:
-            self.channels[conn_id].remove(channel_name)
-            self.subscribers[channel_name].remove((conn_id, conn))
-        return len(self.channels[conn_id])
+        if channel_name in self.channels[conn.id]:
+            self.channels[conn.id].remove(channel_name)
+            self.subscribers[channel_name].remove((conn.id, conn.socket))
+        return len(self.channels[conn.id])
 
     def get_subscribers(self, channel_name: bytes) -> set[tuple[ConnId, socket.socket]]:
         return self.subscribers[channel_name]

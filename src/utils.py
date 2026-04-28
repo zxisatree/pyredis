@@ -1,16 +1,9 @@
-import socket
 from collections import defaultdict
 from math import asin, cos, radians, sin, sqrt
 from threading import RLock
 from typing import Generic, TypeVar
 
 from . import constants
-
-ConnId = tuple[int, str]
-
-
-def construct_conn_id(conn: socket.socket) -> ConnId:
-    return (conn.fileno(), conn.getsockname())
 
 
 def transform_to_execute_output(single_result: str) -> list[bytes]:

@@ -12,13 +12,12 @@ from . import (
     rdb,
 )
 from .codec import parse_bytes_into_cmds
-from .commands import Command
 from .database import Database
 from .exceptions import ArgParseError
-from .interfaces import XactBehaviour
+from .interfaces import Command, ConnWithId, XactBehaviour
 from .logs import logger
 from .replicas import ReplicaHandler
-from .utils import construct_conn_id, transform_to_execute_output
+from .utils import transform_to_execute_output
 
 
 def main(args: Sequence[str] | None = None):
@@ -110,9 +109,10 @@ def accept_conns(
                     # write_socket was closed, cleanup and shutdown this thread
                     break
                 conn, addr = server_socket.accept()
+                conn_with_id = ConnWithId(conn)
                 thread = Thread(
                     target=handle_conn,
-                    args=(conn, addr, db, replica_handler, aof_handler),
+                    args=(conn_with_id, addr, db, replica_handler, aof_handler),
                 )
                 thread.daemon = True
                 thread.start()
@@ -123,16 +123,15 @@ def accept_conns(
 
 
 def handle_conn(
-    conn: socket.socket,
+    conn: ConnWithId,
     addr,
     db: Database,
     replica_handler: ReplicaHandler,
     aof_handler: aof.AofHandler,
 ):
-    conn_id = construct_conn_id(conn)
-    with conn:
+    with conn.socket:
         while True:
-            data = conn.recv(constants.BUFFER_SIZE)
+            data = conn.socket.recv(constants.BUFFER_SIZE)
             if not data:
                 break
             logger.info(f"raw {data=}")
@@ -140,7 +139,7 @@ def handle_conn(
             logger.info(f"{cmds=}")
             for cmd, raw_cmd in list(zip(cmds, raw_cmds)):
                 execute_cmd_for_conn(
-                    cmd, raw_cmd, db, replica_handler, aof_handler, conn, conn_id
+                    cmd, raw_cmd, db, replica_handler, aof_handler, conn
                 )
 
         logger.info(f"Connection closed: {addr=}")
@@ -152,12 +151,11 @@ def execute_cmd_for_conn(
     db: Database,
     replica_handler: ReplicaHandler,
     aof_handler: aof.AofHandler,
-    conn: socket.socket,
-    conn_id: tuple[int, str],
+    conn: ConnWithId,
 ):
-    in_xact = db.xact_exists(conn_id)
-    in_subscribed_mode = db.in_subscribed_mode(conn_id)
-    is_conn_authenticated = db.is_conn_authenticated(conn_id)
+    in_xact = db.xact_exists(conn.id)
+    in_subscribed_mode = db.in_subscribed_mode(conn.id)
+    is_conn_authenticated = db.is_conn_authenticated(conn.id)
 
     if not is_conn_authenticated and not cmd.allowed_while_unauthenticated:
         executed = transform_to_execute_output(constants.NOAUTH_ERROR)
@@ -166,7 +164,7 @@ def execute_cmd_for_conn(
             f"ERR {cmd.keyword} inside MULTI is not allowed".encode()
         ).encode_to_list()
     elif in_xact and cmd.xact_behaviour == XactBehaviour.QUEUE:
-        db.queue_xact_cmd(conn_id, cmd)
+        db.queue_xact_cmd(conn.id, cmd)
         executed = transform_to_execute_output(constants.XACT_QUEUED_RESPONSE)
     elif in_subscribed_mode and not cmd.allowed_in_subscribed_mode:
         executed = data_types.RespSimpleError(
@@ -181,7 +179,7 @@ def execute_cmd_for_conn(
 
     for resp in executed:
         logger.info(f"responding with {resp}")
-        conn.sendall(resp)
+        conn.socket.sendall(resp)
         # better error catching for prod
         # if isinstance(resp, data_types.RespDataType):
         #     logger.warning(
@@ -191,7 +189,7 @@ def execute_cmd_for_conn(
         # else:
         #     resp_bytes = resp
         # logger.info(f"responding with {resp_bytes}")
-        # conn.sendall(resp_bytes)
+        # conn.socket.sendall(resp_bytes)
 
 
 def validate_parse_args(

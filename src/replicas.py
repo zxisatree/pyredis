@@ -5,10 +5,11 @@ from secrets import token_hex
 from threading import Condition
 from time import monotonic
 
-from . import commands, constants, interfaces
+from . import commands, constants
 from .codec import parse_bytes_into_cmds
 from .data_types import RespArray, RespBulkString
 from .database import Database
+from .interfaces import ConnWithId, Command
 from .logs import logger
 from .singleton_meta import SingletonMeta
 
@@ -97,7 +98,9 @@ class ReplicaHandler(metaclass=SingletonMeta):
         # if we get more cases, can use a table instead of hardcoding cases
         match self.handshake_state:
             case ReplicaHandler.ReplicaHandshakeState.READY:
-                master_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                master_conn = ConnWithId(
+                    socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                )
                 master_conn.settimeout(constants.CONN_TIMEOUT)
                 master_conn.connect((self.master_ip, int(self.master_port)))
                 self.master_conn = master_conn
@@ -158,7 +161,7 @@ class ReplicaHandler(metaclass=SingletonMeta):
                 logger.info("connect_to_master_sm complete")
                 self.handshake_state = ReplicaHandler.ReplicaHandshakeState.DONE
 
-    def _execute_cmds(self, cmds: list[tuple[interfaces.Command, bytes]]):
+    def _execute_cmds(self, cmds: list[tuple[Command, bytes]]):
         for cmd, raw_cmd in cmds:
             executed = cmd.execute(self.db, self, self.master_conn)
             if isinstance(cmd, commands.ReplConfGetAckCommand):

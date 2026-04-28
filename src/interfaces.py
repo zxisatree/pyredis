@@ -5,12 +5,11 @@ from datetime import datetime
 from enum import Enum
 from functools import total_ordering
 from typing import TYPE_CHECKING, ClassVar
+from socket import socket
 
 from .exceptions import ExecuteForAofError
 
 if TYPE_CHECKING:
-    import socket
-
     import database
     import replicas
 
@@ -19,6 +18,15 @@ class XactBehaviour(Enum):
     QUEUE = "queue"
     EXECUTE = "execute"
     ERROR = "error"
+
+
+class ConnWithId:
+    def __init__(self, socket: socket) -> None:
+        self.socket = socket
+        self.id = (self.socket.fileno(), self.socket.getsockname())
+
+    def __getattr__(self, name: str):
+        return getattr(self.socket, name)
 
 
 @total_ordering
@@ -86,6 +94,7 @@ class StreamId:
 StrVal = tuple[str, datetime | None]
 StreamVal = list[tuple[StreamId, dict[str, str]]]
 ListVal = list[bytes]
+ConnId = tuple[int, str]
 
 
 class Command(ABC):
@@ -106,7 +115,7 @@ class Command(ABC):
         self,
         db: database.Database,
         replica_handler: replicas.ReplicaHandler,
-        conn: socket.socket,
+        conn: ConnWithId,
     ) -> list[bytes]: ...
 
     def execute_for_aof(self, db: database.Database) -> list[bytes]:

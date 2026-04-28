@@ -14,7 +14,7 @@ from .data_types import (
 from .database import Database
 from .interfaces import Command, XactBehaviour
 from .logs import logger
-from .utils import construct_conn_id, encode_score, transform_to_execute_output
+from .utils import encode_score, transform_to_execute_output
 
 
 class NoOpCommand(Command):
@@ -26,8 +26,7 @@ class PingCommand(Command):
     allowed_in_subscribed_mode = True
 
     def execute(self, db, replica_handler, conn):
-        conn_id = construct_conn_id(conn)
-        if db.in_subscribed_mode(conn_id):
+        if db.in_subscribed_mode(conn.id):
             return RespArray(
                 [RespBulkString(b"pong"), RespBulkString(b"")]
             ).encode_to_list()
@@ -153,7 +152,7 @@ class ReplConfGetAckCommand(Command):
 
 class PsyncCommand(Command):
     def execute(self, db, replica_handler, conn):
-        replica_handler.add_slave(conn)
+        replica_handler.add_slave(conn.socket)
         return [
             RespSimpleString(
                 f"FULLRESYNC {replica_handler.master_replid} {replica_handler.master_repl_offset}".encode()
@@ -243,8 +242,7 @@ class TypeCommand(Command):
 
 class MultiCommand(Command):
     def execute(self, db, replica_handler, conn):
-        conn_id = construct_conn_id(conn)
-        db.start_xact(conn_id)
+        db.start_xact(conn.id)
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
 
 
@@ -252,10 +250,9 @@ class ExecCommand(Command):
     xact_behaviour = XactBehaviour.EXECUTE
 
     def execute(self, db, replica_handler, conn):
-        conn_id = construct_conn_id(conn)
-        if not db.xact_exists(conn_id):
+        if not db.xact_exists(conn.id):
             return RespSimpleError(b"ERR EXEC without MULTI").encode_to_list()
-        has_any_version_changed, cmds = db.pop_xact_for_exec(conn_id)
+        has_any_version_changed, cmds = db.pop_xact_for_exec(conn.id)
         if has_any_version_changed:
             return RespArray(None).encode_to_list()
 
@@ -274,10 +271,9 @@ class DiscardCommand(Command):
     xact_behaviour = XactBehaviour.EXECUTE
 
     def execute(self, db, replica_handler, conn):
-        conn_id = construct_conn_id(conn)
-        if not db.xact_exists(conn_id):
+        if not db.xact_exists(conn.id):
             return RespSimpleError(b"ERR DISCARD without MULTI").encode_to_list()
-        db.pop_xact_for_exec(conn_id)
+        db.pop_xact_for_exec(conn.id)
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
 
 
@@ -438,8 +434,7 @@ class SubscribeCommand(Command):
         self.channel_name = channel_name
 
     def execute(self, db, replica_handler, conn):
-        conn_id = construct_conn_id(conn)
-        channel_count = db.subscribe(self.channel_name, conn, conn_id)
+        channel_count = db.subscribe(self.channel_name, conn)
         return RespArray(
             [
                 RespBulkString(b"subscribe"),
@@ -456,8 +451,7 @@ class UnsubscribeCommand(Command):
         self.channel_name = channel_name
 
     def execute(self, db, replica_handler, conn):
-        conn_id = construct_conn_id(conn)
-        channel_count = db.unsubscribe(self.channel_name, conn, conn_id)
+        channel_count = db.unsubscribe(self.channel_name, conn)
         return RespArray(
             [
                 RespBulkString(b"unsubscribe"),
@@ -689,8 +683,7 @@ class AclSetuserCommand(Command):
 
     def execute(self, db, replica_handler, conn):
         if self.property.startswith(b">"):
-            conn_id = construct_conn_id(conn)
-            db.set_password(self.user, self.property[1:], conn_id)
+            db.set_password(self.user, self.property[1:], conn.id)
             return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
         else:
             raise exceptions.UnsupportedOperationError(
@@ -706,8 +699,7 @@ class AuthCommand(Command):
         self.password = password
 
     def execute(self, db, replica_handler, conn):
-        conn_id = construct_conn_id(conn)
-        is_authenticated = db.authenticate(self.user, self.password, conn_id)
+        is_authenticated = db.authenticate(self.user, self.password, conn.id)
         if is_authenticated:
             return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
         else:
@@ -723,16 +715,14 @@ class WatchCommand(Command):
         self.keys = keys
 
     def execute(self, db, replica_handler, conn):
-        conn_id = construct_conn_id(conn)
         for key in self.keys:
-            db.watch_key(conn_id, key)
+            db.watch_key(conn.id, key)
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
 
 
 class UnwatchCommand(Command):
     def execute(self, db, replica_handler, conn):
-        conn_id = construct_conn_id(conn)
-        db.clear_watched_keys(conn_id)
+        db.clear_watched_keys(conn.id)
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
 
 
