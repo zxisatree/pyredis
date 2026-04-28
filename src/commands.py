@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Iterable, cast
+from typing import cast
 
 from . import constants, exceptions
 from .data_types import (
@@ -18,14 +18,11 @@ from .utils import construct_conn_id, encode_score, transform_to_execute_output
 
 
 class NoOpCommand(Command):
-    expected_arg_count = [0]
-
     def execute(self, db, replica_handler, conn):
         return transform_to_execute_output(constants.NO_OP_ERROR)
 
 
 class PingCommand(Command):
-    expected_arg_count = [0]
     allowed_in_subscribed_mode = True
 
     def execute(self, db, replica_handler, conn):
@@ -39,17 +36,14 @@ class PingCommand(Command):
 
 
 class EchoCommand(Command):
-    expected_arg_count = [1]
-
-    def __init__(self, bulk_str: bytes):
-        self.msg = bulk_str
+    def __init__(self, msg: bytes):
+        self.msg = msg
 
     def execute(self, db, replica_handler, conn):
         return RespBulkString(self.msg).encode_to_list()
 
 
 class SetCommand(Command):
-    expected_arg_count = [2, 3]
     should_propogate_to_replicas = True
     should_write_to_aof = True
 
@@ -75,8 +69,6 @@ class SetCommand(Command):
 
 
 class IncrCommand(Command):
-    expected_arg_count = [1]
-
     def __init__(
         self,
         key: bytes,
@@ -109,8 +101,6 @@ class IncrCommand(Command):
 
 
 class GetCommand(Command):
-    expected_arg_count = [1]
-
     def __init__(self, key: bytes):
         self.key = key
 
@@ -125,28 +115,21 @@ class GetCommand(Command):
 
 
 class CommandCommand(Command):
-    expected_arg_count = [0]
-
     def execute(self, db, replica_handler, conn):
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
 
 
 class InfoCommand(Command):
-    expected_arg_count = [0]
-
     def execute(self, db, replica_handler, conn):
         return replica_handler.get_info()
 
 
 class ReplConfCommand(Command):
-    expected_arg_count = [0]
-
     def execute(self, db, replica_handler, conn):
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
 
 
 class ReplConfAckCommand(Command):
-    expected_arg_count = [1]
     keyword = "REPLCONF"
 
     def execute(self, db, replica_handler, conn):
@@ -155,7 +138,6 @@ class ReplConfAckCommand(Command):
 
 
 class ReplConfGetAckCommand(Command):
-    expected_arg_count = [0]
     keyword = "REPLCONF"
     should_propogate_to_replicas = True
 
@@ -170,8 +152,6 @@ class ReplConfGetAckCommand(Command):
 
 
 class PsyncCommand(Command):
-    expected_arg_count = [0]
-
     def execute(self, db, replica_handler, conn):
         replica_handler.add_slave(conn)
         return [
@@ -183,8 +163,6 @@ class PsyncCommand(Command):
 
 
 class FullResyncCommand(Command):
-    expected_arg_count = [1]
-
     def __init__(self, data: bytes) -> None:
         self.data = data
 
@@ -193,7 +171,6 @@ class FullResyncCommand(Command):
 
 
 class RdbFileCommand(Command):
-    expected_arg_count = [0]
     keyword = ""
 
     def __init__(self, data: bytes) -> None:
@@ -206,7 +183,6 @@ class RdbFileCommand(Command):
 
 
 class ConfigGetCommand(Command):
-    expected_arg_count = [1]
     keyword = "CONFIG"
 
     def __init__(self, key: bytes):
@@ -226,8 +202,6 @@ class ConfigGetCommand(Command):
 
 
 class KeysCommand(Command):
-    expected_arg_count = [1]
-
     def __init__(self, pattern: bytes):
         self.pattern = pattern
 
@@ -243,8 +217,6 @@ class KeysCommand(Command):
 
 
 class WaitCommand(Command):
-    expected_arg_count = [2]
-
     def __init__(self, replica_count: int, timeout: int):
         self.replica_count = replica_count
         self.timeout = timedelta(milliseconds=timeout)
@@ -258,8 +230,6 @@ class WaitCommand(Command):
 
 
 class TypeCommand(Command):
-    expected_arg_count = [1]
-
     def __init__(self, key: bytes):
         self.key = key
 
@@ -272,8 +242,6 @@ class TypeCommand(Command):
 
 
 class MultiCommand(Command):
-    expected_arg_count = [0]
-
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
         db.start_xact(conn_id)
@@ -281,7 +249,6 @@ class MultiCommand(Command):
 
 
 class ExecCommand(Command):
-    expected_arg_count = [0]
     xact_behaviour = XactBehaviour.EXECUTE
 
     def execute(self, db, replica_handler, conn):
@@ -304,7 +271,6 @@ class ExecCommand(Command):
 
 
 class DiscardCommand(Command):
-    expected_arg_count = [0]
     xact_behaviour = XactBehaviour.EXECUTE
 
     def execute(self, db, replica_handler, conn):
@@ -316,8 +282,6 @@ class DiscardCommand(Command):
 
 
 class RpushCommand(Command):
-    expected_arg_count = [2]
-
     def __init__(
         self,
         key: bytes,
@@ -332,8 +296,6 @@ class RpushCommand(Command):
 
 
 class LpushCommand(Command):
-    expected_arg_count = [2]
-
     def __init__(
         self,
         key: bytes,
@@ -348,8 +310,6 @@ class LpushCommand(Command):
 
 
 class LpopCommand(Command):
-    expected_arg_count = [2]
-
     def __init__(self, key: bytes, count: int):
         self.key = key
         self.count = count
@@ -366,8 +326,6 @@ class LpopCommand(Command):
 
 
 class BlpopCommand(Command):
-    expected_arg_count = [1, 2]
-
     def __init__(self, key: bytes, timeout: float):
         self.key = key
         self.timeout = timeout
@@ -384,8 +342,6 @@ class BlpopCommand(Command):
 
 
 class LlenCommand(Command):
-    expected_arg_count = [1]
-
     def __init__(
         self,
         key: bytes,
@@ -401,8 +357,6 @@ class LlenCommand(Command):
 
 
 class LrangeCommand(Command):
-    expected_arg_count = [3]
-
     def __init__(self, key: bytes, start: int, stop: int):
         self.key = key
         self.start = start
@@ -453,8 +407,6 @@ class XaddCommand(Command):
 
 
 class XrangeCommand(Command):
-    expected_arg_count = [3]
-
     def __init__(self, key: bytes, start: str, end: str):
         self.key = key
         self.start = start
@@ -465,8 +417,6 @@ class XrangeCommand(Command):
 
 
 class XreadCommand(Command):
-    expected_arg_count = [2]
-
     def __init__(
         self,
         stream_keys: list[bytes],
@@ -482,7 +432,6 @@ class XreadCommand(Command):
 
 
 class SubscribeCommand(Command):
-    expected_arg_count = [1]
     allowed_in_subscribed_mode = True
 
     def __init__(self, channel_name: bytes):
@@ -501,7 +450,6 @@ class SubscribeCommand(Command):
 
 
 class UnsubscribeCommand(Command):
-    expected_arg_count = [1]
     allowed_in_subscribed_mode = True
 
     def __init__(self, channel_name: bytes):
@@ -520,8 +468,6 @@ class UnsubscribeCommand(Command):
 
 
 class PublishCommand(Command):
-    expected_arg_count = [2]
-
     def __init__(self, channel_name: bytes, msg: bytes):
         self.channel_name = channel_name
         self.msg = msg
@@ -540,8 +486,6 @@ class PublishCommand(Command):
 
 
 class ZaddCommand(Command):
-    expected_arg_count = [3]
-
     def __init__(self, key: bytes, score: float, name: bytes):
         self.key = key
         self.score = score
@@ -554,8 +498,6 @@ class ZaddCommand(Command):
 
 
 class ZrankCommand(Command):
-    expected_arg_count = [2]
-
     def __init__(self, key: bytes, name: bytes):
         self.key = key
         self.name = name
@@ -569,8 +511,6 @@ class ZrankCommand(Command):
 
 
 class ZrangeCommand(Command):
-    expected_arg_count = [3]
-
     def __init__(self, key: bytes, start: int, end: int):
         self.key = key
         self.start = start
@@ -587,8 +527,6 @@ class ZrangeCommand(Command):
 
 
 class ZcardCommand(Command):
-    expected_arg_count = [1]
-
     def __init__(self, key: bytes):
         self.key = key
 
@@ -598,8 +536,6 @@ class ZcardCommand(Command):
 
 
 class ZscoreCommand(Command):
-    expected_arg_count = [2]
-
     def __init__(self, key: bytes, name: bytes):
         self.key = key
         self.name = name
@@ -613,8 +549,6 @@ class ZscoreCommand(Command):
 
 
 class ZremCommand(Command):
-    expected_arg_count = [2]
-
     def __init__(self, key: bytes, name: bytes):
         self.key = key
         self.name = name
@@ -625,8 +559,6 @@ class ZremCommand(Command):
 
 
 class GeoaddCommand(Command):
-    expected_arg_count = [4]
-
     def __init__(
         self,
         key: bytes,
@@ -677,8 +609,6 @@ class GeoposCommand(Command):
 
 
 class GeodistCommand(Command):
-    expected_arg_count = [3]
-
     def __init__(self, key: bytes, place1: bytes, place2: bytes):
         self.key = key
         self.place1 = place1
@@ -692,8 +622,6 @@ class GeodistCommand(Command):
 
 
 class GeosearchCommand(Command):
-    expected_arg_count = [3]
-
     def __init__(
         self,
         key: bytes,
@@ -725,7 +653,6 @@ class GeosearchCommand(Command):
 
 
 class AclWhoamiCommand(Command):
-    expected_arg_count = [0]
     keyword = "ACL"
 
     def execute(self, db, replica_handler, conn):
@@ -733,7 +660,6 @@ class AclWhoamiCommand(Command):
 
 
 class AclGetuserCommand(Command):
-    expected_arg_count = [1]
     keyword = "ACL"
 
     def __init__(self, user: bytes):
@@ -755,7 +681,6 @@ class AclGetuserCommand(Command):
 
 
 class AclSetuserCommand(Command):
-    expected_arg_count = [2]
     keyword = "ACL"
 
     def __init__(self, user: bytes, property: bytes):
@@ -774,7 +699,6 @@ class AclSetuserCommand(Command):
 
 
 class AuthCommand(Command):
-    expected_arg_count = [2]
     allowed_while_unauthenticated = True
 
     def __init__(self, user: bytes, password: bytes):
@@ -806,21 +730,10 @@ class WatchCommand(Command):
 
 
 class UnwatchCommand(Command):
-    expected_arg_count = [0]
-
     def execute(self, db, replica_handler, conn):
         conn_id = construct_conn_id(conn)
         db.clear_watched_keys(conn_id)
         return transform_to_execute_output(constants.OK_SIMPLE_RESP_STRING)
-
-
-def verify_arg_count(
-    command_name: str, expected_arg_count: Iterable[int], args_len: int
-):
-    """Raises a RequestCraftError if arg count does not match"""
-    if args_len not in expected_arg_count:
-        error_msg = f"{command_name} takes {'/'.join(str(i) for i in expected_arg_count)} argument(s), but {args_len} {'was' if args_len == 1 else 'were'} provided"
-        raise exceptions.RequestCraftError(error_msg)
 
 
 def craft_command(*args: str) -> RespArray:

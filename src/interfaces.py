@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import total_ordering
@@ -49,11 +48,6 @@ class StreamId:
         if self.milliseconds_time != other.milliseconds_time:
             return self.milliseconds_time < other.milliseconds_time
         return self.seq_no < other.seq_no
-
-    # def __lt__(self, other: "StreamId"):
-    #     if self.milliseconds_time != other.milliseconds_time:
-    #         return int(self.milliseconds_time) < int(other.milliseconds_time)
-    #     return int(self.seq_no) < int(other.seq_no)
 
     @staticmethod
     def generate_stream_id(id: str, last_id: "StreamId | None") -> "StreamId":
