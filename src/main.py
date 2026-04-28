@@ -2,7 +2,7 @@ import argparse
 import socket
 from pathlib import Path
 from select import select
-from threading import Thread
+from threading import Thread, Event
 from typing import Sequence
 
 from . import (
@@ -50,8 +50,22 @@ def main(args: Sequence[str] | None = None):
             False if replicaof else True, "localhost", port, replicaof, db
         )
         # attempt to connect to master
+        is_replica_handler_ready = Event()
         if replicaof:
-            Thread(target=replica_handler.master_recv_loop).start()
+            Thread(
+                target=replica_handler.master_recv_loop,
+                args=(is_replica_handler_ready,),
+                daemon=True,
+            ).start()
+            if (
+                not is_replica_handler_ready.wait(timeout=60)
+                or replica_handler.handshake_state
+                != ReplicaHandler.ReplicaHandshakeState.DONE
+            ):
+                logger.error(
+                    f"Timed out connecting to master with {replica_handler.handshake_state=}. Exiting now"
+                )
+                return
 
         aof_cmd_data = aof_handler.read()
         aof_cmds, _ = parse_bytes_into_cmds(aof_cmd_data)
@@ -113,8 +127,8 @@ def accept_conns(
                 thread = Thread(
                     target=handle_conn,
                     args=(conn_with_id, addr, db, replica_handler, aof_handler),
+                    daemon=True,
                 )
-                thread.daemon = True
                 thread.start()
         logger.info("accept_conns exiting")
     except Exception:

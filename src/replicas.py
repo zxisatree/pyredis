@@ -2,7 +2,7 @@ import socket
 from datetime import timedelta
 from enum import Enum
 from secrets import token_hex
-from threading import Condition
+from threading import Condition, Event
 from time import monotonic
 
 from . import commands, constants
@@ -79,9 +79,16 @@ class ReplicaHandler(metaclass=SingletonMeta):
         logger.info(f"{self.ack_count=}, {monotonic() - end=} (should be positive)")
         return self.ack_count
 
-    def master_recv_loop(self):
-        while self.handshake_state != ReplicaHandler.ReplicaHandshakeState.DONE:
-            self.connect_to_master()
+    def master_recv_loop(self, is_replica_handler_ready: Event):
+        try:
+            while self.handshake_state != ReplicaHandler.ReplicaHandshakeState.DONE:
+                self.connect_to_master()
+            is_replica_handler_ready.set()
+        except Exception:
+            # handshake_state is not DONE here
+            logger.exception("replica failed to connect to master")
+            is_replica_handler_ready.set()
+            return
         while True:
             logger.info("replica waiting for master...")
             data = self.master_conn.recv(constants.BUFFER_SIZE)
