@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Sequence, cast
+from typing import Self, Sequence, cast
 
 from . import constants
 from .exceptions import ParseError, ValidationError
@@ -9,22 +9,19 @@ from .rdb import RdbParser
 
 class RespDataType(ABC):
     @abstractmethod
-    def __len__(self) -> int: ...
-
-    @abstractmethod
     def encode(self) -> bytes: ...
 
     def encode_to_list(self) -> list[bytes]:
         return [self.encode()]
 
-    @staticmethod
+    @classmethod
     @abstractmethod
     # Returns the parsed object and the new pos
-    def decode(data: bytes, pos: int) -> tuple["RespDataType", int]: ...
+    def decode(cls, data: bytes, pos: int) -> tuple[Self, int]: ...
 
-    @staticmethod
+    @classmethod
     @abstractmethod
-    def validate(that) -> "RespDataType": ...
+    def validate(cls, that) -> Self: ...
 
 
 class RespPlainString(RespDataType):
@@ -33,26 +30,26 @@ class RespPlainString(RespDataType):
     def __init__(self, data: bytes):
         self.data = data
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.data)
 
-    def __str__(self) -> str:
-        return str(self.data)
+    def __str__(self):
+        return str(self.data.decode())
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"RespPlainWrapper({repr(self.data)})"
 
-    def encode(self) -> bytes:
+    def encode(self):
         return self.data
 
-    @staticmethod
-    def decode(data: bytes, pos: int):
+    @classmethod
+    def decode(cls, data, pos):
         raise NotImplementedError(
             "RespPlainWrapper cannot be decoded, is not a RESP data type"
         )
 
-    @staticmethod
-    def validate(that) -> "RespDataType":
+    @classmethod
+    def validate(cls, that):
         raise NotImplementedError("RespPlainWrapper is not a RESP data type")
 
 
@@ -60,21 +57,21 @@ class RespSimpleString(RespDataType):
     def __init__(self, data: bytes):
         self.data = data
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.data)
 
-    def __str__(self) -> str:
-        return str(self.data)
+    def __str__(self):
+        return str(self.data.decode())
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"RespSimpleString({repr(self.data)})"
 
-    def encode(self) -> bytes:
+    def encode(self):
         return b"+" + self.data + b"\r\n"
 
-    @staticmethod
-    def decode(data: bytes, pos: int) -> tuple["RespSimpleString", int]:
-        start = pos
+    @classmethod
+    def decode(cls, data, pos):
+        start = pos + 1
         while pos < len(data) and not is_sep(data, pos):
             pos += 1
         if pos >= len(data):
@@ -84,8 +81,8 @@ class RespSimpleString(RespDataType):
         assert pos <= len(data)
         return (RespSimpleString(simple_str), pos)
 
-    @staticmethod
-    def validate(that) -> "RespSimpleString":
+    @classmethod
+    def validate(cls, that):
         if not isinstance(that, RespSimpleString):
             raise ValidationError(f"Expected RespSimpleString, got {type(that)}")
         return that
@@ -100,7 +97,7 @@ class RespArray(RespDataType):
         else:
             self.elements = []
 
-    def __len__(self) -> int:
+    def __len__(self):
         if self.is_null_array:
             return -1
         return len(self.elements)
@@ -112,25 +109,25 @@ class RespArray(RespDataType):
         else:
             return res
 
-    def __str__(self) -> str:
+    def __str__(self):
         if self.is_null_array:
             return "NULL_ARRAY"
-        return str(self.elements)
+        return "\n".join(str(element) for element in self.elements)
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         if self.is_null_array:
             return "RespArray(None)"
         return f"RespArray({repr(self.elements)})"
 
-    def encode(self) -> bytes:
+    def encode(self):
         if self.is_null_array:
             return constants.NULL_ARRAY_RESP_STRING.encode()
         return f"*{len(self.elements)}\r\n".encode() + b"".join(
             map(lambda x: x.encode(), self.elements)
         )
 
-    @staticmethod
-    def decode(data: bytes, pos: int) -> tuple["RespArray", int]:
+    @classmethod
+    def decode(cls, data, pos):
         start = pos + 1
         while pos < len(data) and not is_sep(data, pos):
             pos += 1
@@ -146,8 +143,8 @@ class RespArray(RespDataType):
         assert pos <= len(data)
         return (RespArray(elements), pos)
 
-    @staticmethod
-    def validate(that) -> "RespArray":
+    @classmethod
+    def validate(cls, that):
         if not isinstance(that, RespArray):
             raise ValidationError(f"Expected RespArray, got {type(that)}")
         return that
@@ -162,24 +159,24 @@ class RespBulkString(RespDataType):
             self.is_nil = False
             self.data = cast(bytes, data)
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.data) if self.data else 0
 
-    def __str__(self) -> str:
-        return str(self.data)
+    def __str__(self):
+        return str(self.data.decode())
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"RespBulkString({repr(self.data)})"
 
-    def encode(self) -> bytes:
+    def encode(self):
         return (
             f"${len(self.data)}\r\n".encode() + self.data + b"\r\n"
             if not self.is_nil
             else constants.NULL_BULK_RESP_STRING.encode()
         )
 
-    @staticmethod
-    def decode(data: bytes, pos: int) -> tuple["RespBulkString", int]:
+    @classmethod
+    def decode(cls, data, pos):
         start = pos + 1
         while pos < len(data) and not is_sep(data, pos):
             pos += 1
@@ -193,37 +190,31 @@ class RespBulkString(RespDataType):
         assert pos <= len(data)
         return (RespBulkString(bulk_str), pos)
 
-    @staticmethod
-    def validate(that) -> "RespBulkString":
+    @classmethod
+    def validate(cls, that):
         if not isinstance(that, RespBulkString):
             raise ValidationError(f"Expected RespBulkString, got {type(that)}")
         return that
-
-    @staticmethod
-    def safe_validate(that) -> tuple["RespBulkString", None] | tuple[None, str]:
-        if not isinstance(that, RespBulkString):
-            return that, f"Expected RespBulkString, got {type(that)}"
-        return that, None
 
 
 class RespInteger(RespDataType):
     def __init__(self, val: int):
         self.val = val
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(str(self.val))
 
-    def __str__(self) -> str:
+    def __str__(self):
         return str(self.val)
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"RespInteger({repr(self.val)})"
 
-    def encode(self) -> bytes:
+    def encode(self):
         return f":{self.val}\r\n".encode()
 
-    @staticmethod
-    def decode(data: bytes, pos: int) -> tuple["RespInteger", int]:
+    @classmethod
+    def decode(cls, data, pos):
         start = pos + 1
         while pos < len(data) and not is_sep(data, pos):
             pos += 1
@@ -234,8 +225,8 @@ class RespInteger(RespDataType):
         assert pos <= len(data)
         return (RespInteger(val), pos)
 
-    @staticmethod
-    def validate(that) -> "RespInteger":
+    @classmethod
+    def validate(cls, that):
         if not isinstance(that, RespInteger):
             raise ValidationError(f"Expected RespInteger, got {type(that)}")
         return that
@@ -245,20 +236,20 @@ class RespSimpleError(RespDataType):
     def __init__(self, data: bytes):
         self.data = data
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.data)
 
-    def __str__(self) -> str:
-        return str(self.data)
+    def __str__(self):
+        return str(self.data.decode())
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"RespSimpleError({repr(self.data)})"
 
-    def encode(self) -> bytes:
+    def encode(self):
         return b"-" + self.data + b"\r\n"
 
-    @staticmethod
-    def decode(data: bytes, pos: int) -> tuple["RespSimpleError", int]:
+    @classmethod
+    def decode(cls, data, pos):
         start = pos + 1
         while pos < len(data) and not is_sep(data, pos):
             pos += 1
@@ -269,8 +260,8 @@ class RespSimpleError(RespDataType):
         assert pos <= len(data)
         return (RespSimpleError(simple_err), pos)
 
-    @staticmethod
-    def validate(that) -> "RespSimpleError":
+    @classmethod
+    def validate(cls, that):
         if not isinstance(that, RespSimpleError):
             raise ValidationError(f"Expected RespSimpleError, got {type(that)}")
         return that
@@ -281,20 +272,20 @@ class RespRdbFile(RespDataType):
         self.data = data
         self.key_values = RdbParser(data).parse_rdb()
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.data)
 
-    def __str__(self) -> str:
-        return str(self.data)
+    def __str__(self):
+        return str(self.data.decode())
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"RespRdbFile({repr(self.data)})"
 
-    def encode(self) -> bytes:
+    def encode(self):
         return f"${len(self.data)}\r\n".encode() + self.data
 
-    @staticmethod
-    def decode(data: bytes, pos: int) -> tuple["RespRdbFile", int]:
+    @classmethod
+    def decode(cls, data, pos):
         start = pos + 1
         while pos < len(data) and not is_sep(data, pos):
             pos += 1
@@ -308,8 +299,8 @@ class RespRdbFile(RespDataType):
         assert pos <= len(data)
         return (RespRdbFile(bulk_str), pos)
 
-    @staticmethod
-    def validate(that) -> "RespRdbFile":
+    @classmethod
+    def validate(cls, that):
         if not isinstance(that, RespRdbFile):
             raise ValidationError(f"Expected RdbFile, got {type(that)}")
         return that

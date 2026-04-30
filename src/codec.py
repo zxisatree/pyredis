@@ -1,5 +1,5 @@
 from . import commands, data_types, interfaces
-from .exceptions import ParseError, UnsupportedOperationError
+from .exceptions import ParseError, UnsupportedOperationError, ValidationError
 from .logs import logger
 
 
@@ -41,13 +41,13 @@ def parse_resp_cmd(
 ) -> interfaces.Command:
     resp_elements: list[data_types.RespBulkString] = []
     for element in resp_data.elements:
-        result = data_types.RespBulkString.safe_validate(element)
-        if result[1] is not None:
+        try:
+            resp_elements.append(data_types.RespBulkString.validate(element))
+        except ValidationError:
             logger.error(
                 f"Unsupported command {cmd[start:end]}, {element} is not a bulk string"
             )
             return commands.NoOpCommand()
-        resp_elements.append(result[0])
 
     cmd_str = resp_elements[0].data.upper()
     raw_cmd = cmd[start:end]
