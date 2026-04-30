@@ -13,12 +13,12 @@ from .aof import AofHandler
 from .data_types import RespArray, RespBulkString, RespDataType
 from .interfaces import (
     Command,
+    ConnId,
     ConnWithId,
     ListVal,
     StreamId,
     StreamVal,
     StrVal,
-    ConnId,
 )
 from .logs import logger
 from .singleton_meta import SingletonMeta
@@ -351,7 +351,7 @@ class Database(metaclass=SingletonMeta):
     def key_exists(self, key: bytes) -> bool:
         return key in self.store
 
-    def validate_stream_id(self, key: bytes, id: str) -> bytes | None:
+    def validate_stream_id(self, key: bytes, id: str) -> str | None:
         """Returns the error when validating the stream ID, if it exists"""
         if key not in self.store:
             return None
@@ -359,7 +359,7 @@ class Database(metaclass=SingletonMeta):
         value = self.store[key]
         if key_type != Database.ValType.STREAM:
             # should change this error message
-            return constants.STREAM_ID_NOT_GREATER_ERROR.encode()
+            return constants.STREAM_ID_NOT_GREATER_ERROR
         value = cast(StreamVal, value)
 
         if id == "*":
@@ -367,7 +367,7 @@ class Database(metaclass=SingletonMeta):
         splitted = id.split("-")
         if len(splitted) != 2:
             # should change this one too
-            return constants.STREAM_ID_NOT_GREATER_ERROR.encode()
+            return constants.STREAM_ID_NOT_GREATER_ERROR
         _, seq_no = splitted
         seq_no_is_star = seq_no == "*"
         if seq_no_is_star:
@@ -375,13 +375,13 @@ class Database(metaclass=SingletonMeta):
         stream_id = StreamId(id)
         is_0_0 = stream_id.milliseconds_time == 0 and stream_id.seq_no == 0
         if is_0_0:
-            return constants.STREAM_ID_TOO_SMALL_ERROR.encode()
+            return constants.STREAM_ID_TOO_SMALL_ERROR
 
         if not value:
             return None
         last_stream_id = value[-1][0]
         if stream_id <= last_stream_id:
-            return constants.STREAM_ID_NOT_GREATER_ERROR.encode()
+            return constants.STREAM_ID_NOT_GREATER_ERROR
         return None
 
     def xadd(self, key: bytes, id: str, value: dict) -> str:

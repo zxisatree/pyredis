@@ -388,7 +388,7 @@ class XaddCommand(Command):
         stream_entry_id = self.values[0]
         err = db.validate_stream_id(self.stream_key, stream_entry_id.decode())
         if err is not None:
-            return RespSimpleError(err).encode_to_list()
+            return RespSimpleError(err.encode()).encode_to_list()
 
         kv_dict = {}
         for i in range(1, len(self.values), 2):

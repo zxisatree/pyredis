@@ -8,30 +8,34 @@ except ImportError:
     pass  # Windows has no readline
 
 from .commands import craft_command
-from .data_types import dispatch
+from .data_types import RespDataType, dispatch
 from .exceptions import ArgParseError
 from .logs import logger
 
 
 @dataclass
 class ClientCliArgs:
-    hostname: str
+    ip_address: str
     port: int
+
+
+def send(client: socket.socket, *args: str) -> RespDataType:
+    client.sendall(craft_command(*args).encode())
+    data = client.recv(4096)
+    resp, _ = dispatch(data, 0)
+    return resp
 
 
 def main():
     parsed_args = parse_and_validate_args()
-    hostname, port = parsed_args.hostname, parsed_args.port
-    prompt_str = f"{hostname}:{port}>"
+    ip_address, port = parsed_args.ip_address, parsed_args.port
+    prompt_str = f"{ip_address}:{port}>"
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect((hostname, port))
+    client.connect((ip_address, port))
     try:
         while True:
             line = input(prompt_str)
-            client.send(craft_command(*line.split(" ")).encode())
-            data = client.recv(4096)
-            resp, _ = dispatch(data, 0)
-            print(resp)
+            print(send(client, *line.split(" ")))
     except (KeyboardInterrupt, EOFError):
         # keyboard interrupts are EOFErrors during input on pwsh nested in bash in a vscode terminal
         logger.info("Caught keyboard interrupt. Exiting and cleaning up...")
@@ -51,7 +55,13 @@ def parse_and_validate_args() -> ClientCliArgs:
         raise ArgParseError(
             f"Invalid port number {args.port}, should be between 0 and 65535"
         )
-    return ClientCliArgs(args.host, args.port)
+    try:
+        ip_address = socket.gethostbyname(args.host)
+    except socket.gaierror:
+        raise ArgParseError(
+            f"Invalid hostname {args.host}, could not resolve to an IP address"
+        )
+    return ClientCliArgs(ip_address, args.port)
 
 
 def setup_argparser() -> argparse.ArgumentParser:
