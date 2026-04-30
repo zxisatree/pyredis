@@ -1,5 +1,5 @@
 from . import commands, data_types, interfaces
-from .exceptions import UnsupportedOperationError
+from .exceptions import ParseError, UnsupportedOperationError
 from .logs import logger
 
 
@@ -11,7 +11,12 @@ def parse_bytes_into_cmds(
     pos = 0
     while pos < len(cmd_bytes):
         orig = pos
-        resp_data, pos = data_types.dispatch(cmd_bytes, pos)
+        try:
+            resp_data, pos = data_types.dispatch(cmd_bytes, pos)
+        except ParseError:
+            logger.error(f"Failed to parse input of length {len(cmd_bytes)}, skipping")
+            logger.error(f"{cmd_bytes=}")
+            return ([], [])
         final_raw_cmds.append(cmd_bytes[orig:pos])
         logger.info(f"Codec.parse {resp_data=}, {pos=}")
         match resp_data:
@@ -306,4 +311,5 @@ def parse_resp_cmd(
     elif cmd_str == b"UNWATCH":
         return commands.UnwatchCommand()
     else:
-        raise Exception(f"skipping unknown command {raw_cmd=}")
+        logger.error(f"skipping unknown command {raw_cmd=}")
+        return commands.NoOpCommand()

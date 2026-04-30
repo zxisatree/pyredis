@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Sequence, cast
 
 from . import constants
-from .exceptions import ValidationError
+from .exceptions import ParseError, ValidationError
 from .logs import logger
 from .rdb import RdbParser
 
@@ -341,6 +341,7 @@ def is_sep(data: bytes, pos: int) -> bool:
 
 
 def dispatch(cmd: bytes, pos: int) -> tuple[RespDataType, int]:
+    """Raises ParseError if input is not valid"""
     data_type = cmd[pos : pos + 1]
     if data_type == b"*":
         return RespArray.decode(cmd, pos)
@@ -349,4 +350,4 @@ def dispatch(cmd: bytes, pos: int) -> tuple[RespDataType, int]:
     elif data_type == b"+":
         return RespSimpleString.decode(cmd, pos)
     else:
-        raise Exception(f"Unsupported data type {data_type}")
+        raise ParseError(f"Unsupported data type {data_type}")

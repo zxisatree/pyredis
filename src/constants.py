@@ -9,15 +9,14 @@ NULL_BULK_RESP_STRING = "$-1\r\n"
 NULL_ARRAY_RESP_STRING = "*-1\r\n"
 XACT_QUEUED_RESPONSE = "+QUEUED\r\n"
 EMPTY_RESP_ARRAY = "*0\r\n"
-SUBSCRIBED_MODE_ERROR = "-ERR Can't execute command: only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in subscribed mode\r\n"
 NOAUTH_ERROR = "-NOAUTH Authentication required.\r\n"
+NO_OP_ERROR = "-ERR NOOP\r\n"
+XOP_ON_NON_STREAM_ERROR = "-ERR The key provided does not refer to a stream\r\n"
 
 STREAM_ID_NOT_GREATER_ERROR = (
     "ERR The ID specified in XADD is equal or smaller than the target stream top item"
 )
 STREAM_ID_TOO_SMALL_ERROR = "ERR The ID specified in XADD must be greater than 0-0"
-XOP_ON_NON_STREAM_ERROR = "ERR The key provided does not refer to a stream"
-NO_OP_ERROR = "ERR NOOP"
 
 EMPTY_RDB_FILE = b64decode(
     "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=="

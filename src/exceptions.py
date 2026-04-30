@@ -20,3 +20,7 @@ class ExecuteForAofError(Exception):
 
 class RdbParseError(Exception):
     pass
+
+
+class ParseError(Exception):
+    pass
