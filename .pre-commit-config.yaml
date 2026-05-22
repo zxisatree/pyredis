@@ -1,0 +1,13 @@
+repos:
+  - repo: local
+    hooks:
+      - id: black
+        name: black
+        entry: uvx black
+        language: system
+        types: [python]
+      - id: isort
+        name: isort
+        entry: uvx isort
+        language: system
+        types: [python]
